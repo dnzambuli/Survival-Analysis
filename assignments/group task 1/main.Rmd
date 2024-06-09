@@ -1,0 +1,254 @@
+---
+title: "Group 4 work"
+author: "Nzambuli Daniel"
+date: "2024-06-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Recode the data using the following parameters
+
+1.  ongoing -\> 04/06/2024
+2.  AX -\> END `sponsor of the patient` **Client**
+
+# The data
+
+```{r}
+library(readxl)
+Patient_Data = read_excel("Patient Data.xlsx")
+View(Patient_Data)
+```
+
+```{r}
+head(Patient_Data)
+```
+
+### Convert dates to Date datatype
+
+```{r}
+as.Date(as.numeric(Patient_Data$Date_Ended), format =  "%Y-%m-%d", origin ="1899-12-30")
+```
+
+### The conversion of Date ended
+
+**Points to note**
+
+-   converting text to dates introduces NA for text data like `ongoing` which may be misleading when the data has its own NA values
+
+-   Setting the ongoing data to `04/06/2024` is chosen as the first step then the column will be converted to date data afterwards
+
+-   Noticed an entry `04/12/923` converting it to NA because it does not make logical sense. It makes a terrifying assumption of an individual that is `1101` years old.
+
+```{r}
+Patient_Data$Date_Ended[Patient_Data$Date_Ended == "04/12/923"] = NA 
+```
+
+```{r}
+library(dplyr)
+
+# there is a challenge with casting in dplyr a step by step process is the best option
+
+date = Patient_Data$Date_Ended
+
+# Convert the date data with ongoing to "2024-06-04"
+date[date == "Ongoing"] = "2024-06-04"
+
+# convert all the data to numeric 
+# convert the numbers to dates 
+date_b = date[!is.na(date) & date != "2024-06-04"]
+date[!is.na(date) & date != "2024-06-04"] = as.character(as.Date(as.numeric(date_b), origin = "1899-12-30"))
+
+# format to standard date format
+date
+```
+
+-   potential issue: There is a date `12/1/2024` present in the data on the $20^{th}$ entry
+
+```{r}
+clean_Data = Patient_Data
+clean_Data$Date_Ended = date
+
+clean_Data = clean_Data %>%
+  mutate(Date_Started = as.Date(Date_Started, format = "%Y-%m-%d"),
+         Date_Ended = as.Date(Date_Ended, format = "%Y-%m-%d"))
+head(clean_Data)
+```
+
+## Question 1
+
+### Fit the survival function for the data and interpret the results
+
+```{r}
+library(survival)
+library(survminer)
+
+surv_Data = data.frame(duration = as.numeric(clean_Data$Date_Ended - clean_Data$Date_Started),
+                       event_observed = ifelse(!is.na(clean_Data$Date_Ended) & clean_Data$Date_Ended != "2024-06-04", 1, 0))
+head(surv_Data)
+```
+
+#### Kaplan-Meier Fit
+
+```{r}
+surv_obj = Surv(time = surv_Data$duration, event = surv_Data$event_observed)
+km_fit = survfit(surv_obj~1, data = clean_Data)
+
+```
+
+#### Summary
+
+```{r}
+summary(km_fit)
+```
+
+```         
+1. n.risk: The number of people at risk of experiencing death just before the given number of days from the begining of the experiment.
+
+2. n.event: The number of deaths that occurred at the given time.
+
+3. survival: The estimated survival probability at the given time.
+
+4. std.err: The standard error of the estimated survival probability.
+
+5. lower 95% CI: The lower bound of the 95% confidence interval for the survival probability.
+
+6. upper 95% CI: The upper bound of the 95% confidence interval for the survival probability.
+```
+
+**Example meaning**
+
+-   at **6 days** there is a `96.7%` chance of not experiencing death and as time progresses this value lowers to `54.6 %` on **day 820**
+
+-   The **confidence interval** `reduces (widens )` indicating it has become more challenging to predict death as time progresses
+
+#### Plot
+
+```{r}
+ggsurvplot(km_fit, data = clean_Data, 
+           xlab = "Days", 
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve")
+```
+
+**Interpretation**
+
+-   The survival curve reflects the widening confidence interval with the shaded area around the curve increasing in size as the days increase
+
+-   The initial survival probability of 1 indicates all individuals are alive at the beginning of the experiment
+
+-   On day 820 the graph becomes a straight line indicating individuals after that day never got to experience death
+
+-   As time progresses, the survival probability decreases, indicating that more subjects are dying
+
+-   Death occurs very early indicated by the initial **sharp drop**
+
+-   Around 500 days, the survival probability is approximately 0.75, meaning about 75% of the subjects are still alive.
+
+### Fit the hazard function for the data and interpret the results
+
+Meant to show when the risk of experiencing an event is highest
+
+-   develops `y-axis` the instantaneous risk of experiencing death
+
+-   `x-axis` the time in days
+
+#### A cox proportional Hazard 
+
+```{r}
+haz_fit = coxph(surv_obj~1, data = clean_Data)
+
+# baseline hazard function
+base_haz = basehaz(haz_fit, centered = F)
+
+summary(haz_fit)
+```
+
+This output represents a baseline model from which we can infer whether later models fit the data better.
+
+-   this will be assessed by getting log likelihood values that are $-259.473 \lt$
+
+#### Plot the hazard function
+
+```{r}
+ggplot(base_haz, aes(x = time, y = hazard))+
+  geom_line()+
+  labs(x = "Days", 
+       y = "Hazard", 
+       title = "Baseline Hazard Function")
+```
+
+**Interpretation**
+
+in the initial stages the likelihood of death happening is ***low***
+
+However, as time goes by there are steeper spikes which indicates that as time passes the patients are more likely to die.
+
+The plateaus in the graph indicate periods where there are minimal changes to the population.
+
+The plateau after day 800 indicates that after that day most of the population did not experience a new death case.
+
+large magnitudes in the spikes like on day 100, 400 and 800 may indicate a potential pattern that may need further study to ascertain the type of intervention to be made to help mitigate the spike in deaths on those periods
+
+### Fit the cumulative hazard function and interpret the results
+
+```{r}
+
+```
+
+### Re-code the columns AN, AO, AP, AQ, AR, AS, AT, AU, AV to have
+
+> Not Difficult [0]
+>
+> Somewhat [1]
+>
+> Very Difficult [2]
+>
+> Extremely Difficult [3]
+
+### Then introduce a new variable of the sum such that if the sum is
+
+> |  sum  |            Meaning |
+> |:-----:|-------------------:|
+> | 0- 4  |      None/ minimal |
+> |  5-9  |     mild depressed |
+> | 10-14 | moderate depressed |
+> | 15-19 |    moderate severe |
+> | 20-27 |  severe depression |
+
+## Question 2
+
+### Using appropriate visualization techniques, present the relationship between Age of patient and age of client/ caregiver
+
+### For Q41: Which disease or medical conditions did the patient have before being admitted at Care 360? (tick that applies). See columns BN, BP, BR, BT, BV, BX, BZ, CB, CD, CF, CH, CJ, CL, CN, CP, CR, CT, CV
+
+#### DO bar chart frequencies for the categories
+
+> 1.  Chronic Cardiac disease (not hypertension)
+> 2.  Hypertension
+> 3.  Chronic pulmonary disease including Asthma/ Bronchitis/COPD
+> 4.  Chronic Kidney Disease
+> 5.  Obesity
+> 6.  Liver Disease
+> 7.  Chronic neurological disorder
+> 8.  Diabetes Mellitus
+> 9.  Rheumatologic disorder
+> 10. Tuberculosis
+> 11. HIV and AIDS
+> 12. Arthritis
+> 13. Stroke
+> 14. Cancer
+> 15. Mental health including depression and anxiety
+> 16. Advanced Age
+> 17. After Surgery
+> 18. Fracture
+
+### For Q.43: At Care 360, did they detect any health condition which the patient was not aware of before -merge Not Sure and No-.
+
+### For those who said yes do a barchart on the frequency for column CZ, DA, DB, DC, DD, DE, DF, DG, DH, DI, DJ, DK, DL, DM, DN, DO, DP
+
+### Compare the survival curves for those who said NO and those who said yes above 
+
+### Summarise the variable : Q.35: What is the main reason that made you bring your patient to care 360 column BH
