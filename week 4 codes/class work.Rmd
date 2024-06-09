@@ -1,0 +1,188 @@
+---
+title: "Survival analysis with veteran data"
+author: "Nzambuli Daniel"
+date: "2024-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages
+
+```{r}
+library(survival)
+library(ranger)
+library(ggplot2)
+library(dplyr)
+library(ggfortify)
+
+```
+
+```{r}
+data = veteran
+head(data)
+```
+
+> **Describing the data**
+>
+> |               |                                           |
+> |:--------------|:------------------------------------------|
+> | **trt:**      | 1=standard 2=test                         |
+> | **celltype:** | 1=squamous, 2=smallcell, 3=adeno, 4=large |
+> | **time:**     | survival time                             |
+> | **status:**   | censoring status                          |
+> | **karno:**    | Karnofsky performance score (100=good)    |
+> | **diagtime:** | months from diagnosis to randomisation    |
+> | **age:**      | in years                                  |
+> | **prior:**    | prior therapy 0=no, 10=yes                |
+
+## Kaplan Meier Analysis
+
+```{r}
+km = with(data, Surv(time, status))
+head(km, 80)
+```
+
+> **Pluses –** indicate that censoring has taken place
+
+## Km - fit
+
+```{r}
+km_fit = survfit(Surv(time, status)~1, data = data) # for all the data set, link = 1
+summary(km_fit)
+
+```
+
+### select only specific colums
+
+> select the values at point `1, 30, 60, 90, 180, 270, ...`
+
+```{r}
+summary(km_fit, times = c(1, 30, 60, 90 * (1:10)))
+```
+
+## Plot
+
+```{r}
+plot(km_fit, xlab = "Days", main = "Kaplan Meier Plot")
+```
+
+### Using autoplot
+
+```{r}
+autoplot(km_fit)
+```
+
+## Treatment
+
+```{r}
+km_fit_trt = survfit(Surv(time, status)~trt, data = data) # for all the data set, link = 1
+autoplot(km_fit_trt)
+```
+
+## Trying as a factor
+
+```{r}
+data_2  = mutate(data, trt = as.factor(ifelse(trt == 1,"standard", "test")))
+
+km_fit_trt = survfit(Surv(time, status)~trt, data = data_2) # for all the data set, link = 1
+autoplot(km_fit_trt)
+```
+
+## Survival by age
+
+```{r}
+vet = mutate(data, AG = ifelse((age < 60), "LT60", "OV60"),
+             AG = factor(AG),
+             trt = factor(trt, labels = c("standard", "test")),
+             prior = factor(prior, labels = c("No", "Yes")))
+
+km_AG_fit = survfit(Surv(time, status)~AG, data = vet)
+autoplot(km_AG_fit)
+```
+
+## GGsurvfit fit the survival model
+
+```{r}
+library(ggsurvfit)
+```
+
+# Using df_colon data
+
+|           |                                                                                   |
+|:-----------------|:-----------------------------------------------------|
+| id:       | id                                                                                |
+| study:    | 1 for all patients                                                                |
+| rx:       | Treatment - Obs(ervation), Lev(amisole), Lev(amisole)+5-FU                        |
+| sex:      | 1=male                                                                            |
+| age:      | in years                                                                          |
+| obstruct: | obstruction of colon by tumour                                                    |
+| perfor:   | perforation of colon                                                              |
+| adhere:   | adherence to nearby organs                                                        |
+| nodes:    | number of lymph nodes with detectable cancer                                      |
+| time:     | days until event or censoring                                                     |
+| status:   | censoring status                                                                  |
+| differ:   | differentiation of tumour (1=well, 2=moderate, 3=poor)                            |
+| extent:   | Extent of local spread (1=submucosa, 2=muscle, 3=serosa, 4=contiguous structures) |
+| surg:     | time from surgery to registration (0=short, 1=long)                               |
+| node4:    | more than 4 positive lymph nodes                                                  |
+| etype:    | event type: 1=recurrence,2=death                                                  |
+
+```{r}
+colon_data = df_colon
+
+p = survfit(Surv(time, status)~surg, data = colon_data)|>
+  ggsurvfit(linewidth = 1)+
+  add_confidence_interval()+
+  add_risktable()+
+  add_quantile(y_value = 0.6, color = "gray50", linewidth = 0.75)+
+  scale_ggsurvfit()
+
+p+
+  # limit plot to show 8 years or less
+  coord_cartesian(xlim = c(0, 8))+
+  # update figure labels/titles
+  labs(
+    y = "percentage survival",
+    title = "recurrence by time from surgery to randomization"
+  )
+```
+
+## New model
+
+```{r}
+library(tibble)
+library(knitr)
+library(ezfun)
+library(lubridate)
+library(gtsummary)
+library(tidycmprsk)
+library(condSURV)
+```
+
+```{r}
+lung = lung %>% mutate(status = recode(status, `1` = 0, `2` = 1))
+head(lung)
+```
+
+# Sx_date data
+
+```{r}
+date_ex = tibble(sx_date = c("2007-06-22", "2004-02-13", "2010-10-27"),
+                 last_fup_date = c("2017-04-15", "2018-07-04", "2016-10-31"))
+date_ex
+```
+
+```{r}
+date_ex = date_ex %>% mutate(
+  sx_date = ymd(sx_date),
+  last_fup_date = ymd(last_fup_date)
+)
+date_ex
+```
+
+```{r}
+
+```

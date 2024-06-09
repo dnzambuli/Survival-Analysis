@@ -1,0 +1,16 @@
+---
+title: "Encoding data"
+author: "Nzambuli Daniel"
+date: "2024-06-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Recode the data using the following parameters 
+
+1. ongoing -> 04/06/2024
+2. AX -> END `sponsor of the patient` **Client**
+3. 
