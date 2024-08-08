@@ -1,0 +1,120 @@
+####################################
+#
+## Romeo 1.1
+#
+######################################
+
+{# {r} # # Load necessary libraries # library(readxl) # library(dplyr) # library(stringr) # library(ggplot2) # library(ggpubr) #  # # Load the data # Patient_Data <- read_excel("Task2_data.xlsx")
+
+{# {r} # # Clean and combine the Preferred_Care data # Patient_Data <- Patient_Data %>% #   mutate(Preferred_Care = str_replace_all(Preferred_Care, "Homecare provided by a Healthcare Provider", "Homecare Provided by a Healthcare Provider"), #          Preferred_Care = str_replace_all(Preferred_Care, "Homecare Provided by family member", "Homecare under a family member") #   ) #  # # Define the expected values for Preferred_Care # preferred_care_levels <- c("Homecare under a family member/relative", #                            "Homecare provided by a Healthcare Provider", #                            "Hospital setting", #                            "Step down facility like Care 360", #                            "Other") #  # # Convert Preferred_Care to factor with defined levels # Patient_Data$Preferred_Care <- factor(Patient_Data$Preferred_Care, levels = preferred_care_levels)
+
+
+######################################
+#
+## Romeo 1.2
+#
+######################################
+
+{r}
+# # Function to calculate percentages and format data
+# calculate_percentage <- function(data, column_name) {
+#   data <- as.data.frame(table(data[[column_name]]))
+#   data$Percentage = data$Freq / sum(data$Freq) * 100
+#   colnames(data) <- c("Preferred_Care", "Frequency", "Percentage")
+#   data <- data[order(factor(data$Preferred_Care, levels = preferred_care_levels)), ]
+#   return(data)
+# }
+# 
+# # Calculate percentage data for all patients
+# Preferred_Care_Data <- calculate_percentage(Patient_Data, "Preferred_Care")
+# 
+# # Calculate percentage data for Home Care patients
+# HomeCare_Preferred_Care <- Patient_Data %>%
+#   filter(Facility_Type == "Home-care") %>%
+#   calculate_percentage("Preferred_Care")
+# 
+# # Calculate percentage data for Inpatient patients
+# Inpatient_Preferred_Care <- Patient_Data %>%
+#   filter(Facility_Type == "Inpatient") %>%
+#   calculate_percentage("Preferred_Care")
+
+
+###########################################
+#
+## Romeo 1.3
+#
+############################################
+
+{r}
+# # Function to calculate percentages and format data
+# calculate_percentage <- function(data, column_name) {
+#   data <- as.data.frame(table(data[[column_name]]))
+#   data$Percentage = data$Freq / sum(data$Freq) * 100
+#   colnames(data) <- c("Preferred_Care", "Frequency", "Percentage")
+#   data <- data[order(factor(data$Preferred_Care, levels = preferred_care_levels)), ]
+#   return(data)
+# }
+# 
+# # Calculate percentage data for all patients
+# Preferred_Care_Data <- calculate_percentage(Patient_Data, "Preferred_Care")
+# 
+# # Calculate percentage data for Home Care patients
+# HomeCare_Preferred_Care <- Patient_Data %>%
+#   filter(Facility_Type == "Home-care") %>%
+#   calculate_percentage("Preferred_Care")
+# 
+# # Calculate percentage data for Inpatient patients
+# Inpatient_Preferred_Care <- Patient_Data %>%
+#   filter(Facility_Type == "Inpatient") %>%
+#   calculate_percentage("Preferred_Care")
+
+
+###########################################
+#
+## Romeo 1.4
+#
+############################################
+
+{r}
+# # Function to create bar graph with percentage labels
+# create_percentage_bar_graph <- function(data, y_col) {
+#   ggplot(data, aes(x = Preferred_Care, y = Percentage, fill = Preferred_Care)) +
+#     geom_bar(stat = "identity") +
+#     coord_flip() +
+#     labs(x = "Preferred Care Arrangement", y = y_col, title = paste("Percentage of", y_col, "by Preferred Care Arrangement")) +
+#     scale_y_continuous(breaks = seq(0, 100, 10)) +
+#     theme_minimal() +
+#     geom_text(aes(label = sprintf("%.1f%%", Percentage)), hjust = -0.1)
+# }
+
+##############################################
+#
+## Daniel
+#
+###############################################
+{r}
+all_patient_gender_crosstab= as.data.frame(table(shift_by_gender$gender, shift_by_gender$shift))
+colnames(all_patient_gender_crosstab) = c("Gender", "Shift", "Count")
+all_patient_gender_crosstab =all_patient_gender_crosstab[!is.na(as.character(all_patient_gender_crosstab$Shift)),]
+row.names(all_patient_gender_crosstab) <- NULL
+all_patient_gender_crosstab = all_patient_gender_crosstab[order(all_patient_gender_crosstab$Gender), ]
+print("Cross tablulation of all patients")
+all_patient_gender_crosstab
+
+
+{r}
+shift_by_gender = Patient_Data %>%
+  filter(!is.na(Shift_Taken)) %>%
+  select(Shift_Taken, Sex_Patient)
+colnames(shift_by_gender) = c("shift", "gender")
+
+Homecare_shift_by_gender = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  select(Shift_Taken, Sex_Patient) 
+colnames(Homecare_shift_by_gender) = c("shift", "gender")
+
+
+InPatient_shift_by_gender = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  select(Shift_Taken, Sex_Patient) 
+colnames(InPatient_shift_by_gender) = c("shift", "gender")

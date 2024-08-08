@@ -1,0 +1,970 @@
+---
+title: "Group 3 work"
+author: "Nzambuli Daniel & Waimiri Joseph Romeo"
+date: "2024-06-08"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+xlim_global <- c(0, 1200)
+```
+
+# Recode the data using the following parameters
+
+1.  ongoing -\> 04/06/2024
+2.  AX -\> END `sponsor of the patient` **Client**
+
+# The data
+
+```{r}
+library(readxl)
+Patient_Data = read_excel("Patient Data.xlsx")
+```
+
+```{r}
+head(Patient_Data)
+```
+## Noticed the last 8 rows of the dataset are all NA values
+
+```{r}
+Patient_Data[seq(190, 198),]
+```
+**Decision** dropping these columns
+
+```{r}
+Patient_Data = Patient_Data[seq(1, 189, 1),]
+```
+
+
+## Noticed some dates are NA 
+
+```{r}
+Patient_Data[is.na(Patient_Data$Date_Started),]
+```
+```{r}
+Patient_Data[is.na(Patient_Data$Date_Ended),]
+```
+**Decision** the NA date Ended will be converted to ongoing while the NA date started was not given a desired start date hence the columns will be dropped before cleaning
+
+```{r}
+library(dplyr)
+Patient_Data = Patient_Data %>% filter(!is.na(Date_Started))
+Patient_Data[is.na(Patient_Data$Date_Ended),]$Date_Ended = 'Ongoing'
+```
+
+### Convert dates to Date datatype
+
+```{r}
+as.Date(as.numeric(Patient_Data$Date_Ended), format =  "%Y-%m-%d", origin ="1899-12-30")
+```
+
+### The conversion of Date ended
+
+**Points to note**
+
+-   converting text to dates introduces NA for text data like `ongoing` which may be misleading when the data has its own NA values
+
+-   Setting the ongoing data to `04/06/2024` is chosen as the first step then the column will be converted to date data afterwards
+
+-   Noticed an entry `04/12/923` converting it to NA because it does not make logical sense. It makes a terrifying assumption of an individual that is `1101` years old.
+
+-   will be relabeled to `04/12/2023`
+
+
+```{r}
+Patient_Data$Date_Ended[Patient_Data$Date_Ended == "04/12/923"] = as.Date("2023-12-04") 
+```
+
+- Date on row 174 is in improper format will be formated to `2023-12-04` from `04/s12/2023`
+
+
+-   clean the Facility Type data to have only two variables
+
+```{r}
+unique(Patient_Data$Facilty_Type)
+```
+
+```{r}
+# cols_pat = colnames(Patient_Data)
+# cols_pat[3] = "Facility_Type"
+# colnames(Patient_Data) = cols_pat
+# colnames(Patient_Data)[3]
+```
+
+```{r}
+library(dplyr)
+Patient_Data = Patient_Data %>% mutate(
+  Facilty_Type = ifelse(Facilty_Type == "non Resident", "Non Resident", Facilty_Type)
+)
+
+Patient_Data = Patient_Data %>% rename(Facility_Type = Facilty_Type)
+Patient_Data <- Patient_Data %>%
+  mutate(Facility_Type = ifelse(Facility_Type == "Non Resident", "Out-Patient", 
+                                ifelse(Facility_Type == "Resident", "In-Patient", NA)))
+
+Patient_Data$Facility_Type = factor(Patient_Data$Facility_Type, levels = c("Out-Patient", "In-Patient"))
+```
+
+```{r}
+unique(Patient_Data$Facility_Type)
+```
+
+### Cleaning the rest of the data
+
+```{r}
+library(dplyr)
+
+# there is a challenge with casting in dplyr a step by step process is the best option
+
+date = Patient_Data$Date_Ended
+
+# Convert the date data with ongoing to "2024-06-04"
+date[date == "Ongoing"] = "2024-06-04"
+
+# convert all the data to numeric 
+# convert the numbers to dates 
+date_b = date[!is.na(date) & date != "2024-06-04"]
+date[!is.na(date) & date != "2024-06-04"] = as.character(as.Date(as.numeric(date_b), origin = "1899-12-30"))
+
+# format to standard date format
+date
+```
+
+-   potential issue: There is a date `12/1/2024` present in the data on the $20^{th}$ entry
+
+```{r}
+clean_Data = Patient_Data
+clean_Data$Date_Ended = date
+
+clean_Data = clean_Data %>%
+  mutate(Date_Started = as.Date(Date_Started, format = "%Y-%m-%d"),
+         Date_Ended = as.Date(Date_Ended, format = "%Y-%m-%d"))
+head(clean_Data)
+```
+
+### Data with wrong imputation
+
+This was noted because there was negative numbers in the duration of being in Care 360
+
+```{r}
+a = clean_Data[c(140, 33, 58), ]$Date_Started
+```
+
+```{r}
+clean_Data[148,]$Date_Started = as.Date("2023-12-15")
+b = clean_Data[c(140, 33, 58), ]$Date_Ended
+clean_Data[c(140, 33, 58), ]$Date_Started = b
+clean_Data[c(140, 33, 58), ]$Date_Ended = a
+
+clean_Data[c(148, 140, 33, 58), ]$Date_Ended
+clean_Data[c(148, 140, 33, 58), ]$Date_Started
+```
+
+-   `2024-12-15` is a patient that started later than the end date of the study. The patient data needs to be removed as it does not make logical sense
+
+```{r}
+# clean_Data = clean_Data %>% filter(Date_Started <= Date_Ended)
+# head(clean_Data)
+```
+
+
+
+### Swap the dates for the date started in the event dates ended are earlier than date started
+
+```{r}
+if (any(clean_Data$Date_Started > clean_Data$Date_Ended, na.rm = TRUE)) {
+  swap_dates = clean_Data$Date_Started > clean_Data$Date_Ended
+  clean_Data[swap_dates, c("Date_Started", "Date_Ended")] = clean_Data[swap_dates, c("Date_Ended", "Date_Started")]
+  result = nrow(clean_Data) == 187  # Confirm that no data has been lost
+} else {
+  result = nrow(clean_Data) == 187
+}
+
+print(result) # will print True because no data is lost
+```
+
+## Question 1
+
+### Fit the survival function for the data and interpret the results
+
+```{r}
+library(survival)
+library(survminer)
+
+surv_Data = data.frame(duration = as.numeric(clean_Data$Date_Ended - clean_Data$Date_Started),
+                       event_observed = ifelse(!is.na(clean_Data$Date_Ended) & clean_Data$Date_Ended != "2024-06-04", 1, 0))
+head(surv_Data)
+```
+
+#### Kaplan-Meier Fit
+
+```{r}
+clean_Data$duration = surv_Data$duration
+clean_Data$event_observed = surv_Data$event_observed
+```
+
+```{r}
+surv_obj = Surv(time = surv_Data$duration, event = surv_Data$event_observed)
+km_fit = survfit(surv_obj~Facility_Type, data = clean_Data)
+
+```
+
+#### Summary
+
+```{r}
+summary(km_fit)
+```
+
+```         
+1. n.risk: The number of people at risk of experiencing death just before the given number of days from the begining of the experiment.
+
+2. n.event: The number of deaths that occurred at the given time.
+
+3. survival: The estimated survival probability at the given time.
+
+4. std.err: The standard error of the estimated survival probability.
+
+5. lower 95% CI: The lower bound of the 95% confidence interval for the survival probability.
+
+6. upper 95% CI: The upper bound of the 95% confidence interval for the survival probability.
+```
+
+#### 1. Interpreting summary
+
+> **Survival Probabilities and Time Points**:
+>
+> -   For `Out-Patient`:
+>
+>     -   At day 4, the survival probability is 0.994.
+>
+>     -   At day 10, the survival probability is 0.951.
+>
+>     -   At day 215, the survival probability is 0.776.
+>
+>     -   At day 820, the survival probability is 0.584.
+>
+> -   For `In-Patient`:
+>
+>     -   At day 3, the survival probability is 0.950.
+>
+>     -   At day 90, the survival probability is 0.700.
+>
+>     -   At day 487, the survival probability is 0.321.
+>
+> `Out-Patient` group has a slower decline in survival probability compared to the `In-Patient` group, indicating better survival for `In-Patient`.
+
+#### 2. Visual Plot
+
+```{r}
+ggsurvplot(km_fit, data = clean_Data,
+           pval = TRUE, conf.int = TRUE,
+            risk.table = TRUE, 
+           risk.table.col = "strata",
+           ggtheme = theme_bw(), 
+           palette = c("#E7B800", "#2E9FDF"),
+           xlab = "Days", 
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve Based on Facility Type",
+           xlim = c(0, 900))
+```
+
+**Interpretation**
+
+The plot shows survival curves for two groups: `Out-Patient` (yellow) and `In-Patient` (blue).
+
+-   `out-patients` have a higher survival probability over time compared to the `in-patients`.
+
+-   The rapid drop in the `in-patient` group is an indicator of a higher rate of death within the group.
+
+Confidence Interval of 95%
+
+-   for both in-patient and out-patient groups as time progresses it becomes increasingly challenging to predict the occurrence of events. This is more serious in the case of `In-Patient` data by the wider spread of the shaded area around the survival curve
+
+Number at Risk
+
+-   In the inital point of the study the individuals at risk are `165` for `out-patient` and `20` for `in-patient` . This is indicated in the lower table
+
+Log-Rank Test
+
+> $H_0$ There is no significant difference between the survival time of the two groups; in-patient and out-patient
+>
+> $H_1$ There is a statistically significant difference in the survival time of the two groups
+
+A p-value of `0.045` indicates that there is a statistically significant difference between the survival curves of the two groups at the 5% significance level. This means you can reject the null hypothesis and **conclude** that `the survival experience of the two groups is different`.
+
+### Fit the hazard function for the data and interpret the results
+
+Meant to show when the risk of experiencing an event is highest
+
+-   develops `y-axis` the instantaneous risk of experiencing death
+
+-   `x-axis` the time in days
+
+#### A cox proportional Hazard
+
+```{r}
+clean_resident = clean_Data %>% filter(Facility_Type == "In-Patient")
+clean_non_resident = clean_Data %>% filter(Facility_Type == "Out-Patient")
+```
+
+#### 1. Combined Hazard Function
+
+```{r}
+haz_fit = coxph(surv_obj~1, data = clean_Data)
+
+# baseline hazard function
+base_haz = basehaz(haz_fit, centered = F)
+
+summary(haz_fit)
+```
+
+This output represents a baseline model from which we can infer whether later models fit the data better.
+
+-   this will be assessed by getting log likelihood values that are $-259.5536 \lt$
+
+#### Plot the hazard function
+
+```{r}
+breaks = c(3, 6, 9, 18, 180, 360, 720, 820)
+ggplot(base_haz, aes(x = time, y = hazard))+
+  geom_line()+
+  labs(x = "Days", 
+       y = "Hazard", 
+       title = "Baseline Hazard Function")+
+  scale_x_continuous(breaks = breaks, limits = c(0, 820))
+```
+
+**Interpretation**
+
+in the initial stages the likelihood of death happening is ***low***
+
+However, as time goes by there are steeper spikes which indicates that as time passes the patients are more likely to die.
+
+The plateaus in the graph indicate periods where there are minimal changes to the population.
+
+The plateau after day 800 indicates that after that day most of the population did not experience a new death case.
+
+large magnitudes in the spikes like on day 100, 400 and 800 may indicate a potential pattern that may need further study to ascertain the type of intervention to be made to help mitigate the spike in deaths on those periods
+
+#### Split View In-Patient
+
+```{r}
+haz_fit_resident = coxph(Surv(time = duration, event = event_observed)~1, data = clean_resident)
+
+base_haz_resident = basehaz(haz_fit_resident, centered = F)
+
+summary(haz_fit_resident)
+
+ggplot(base_haz_resident, aes(x = time, y = hazard))+
+  geom_line()+
+  labs(x = "Days", 
+       y = "Hazard", 
+       title = "Baseline Hazard Function for In-Patient")+
+  scale_x_continuous(breaks = breaks, limits = c(0, 820))
+```
+
+>Initial Period: The hazard starts at 0 and shows an increase around day 6, indicating a rise in the death-rate occurring early in the period.
+>
+> Intermediate Plateau: Between approximately days 100 to 400, the hazard remains relatively constant, suggesting a steady level in the risk of dying during this period.
+>
+> Steep Increase: Around day 500, there is a significant jump in the hazard, indicating a sharp rise in the risk death.
+>
+> Stabilization: After the steep increase, the hazard stabilizes again, suggesting the risk remains high but no more deaths were observed after day 500.
+
+#### Split View Out-Patient
+
+```{r}
+haz_fit_non_resident = coxph(Surv(time = duration, event = event_observed)~1, data = clean_non_resident)
+
+base_haz_non_resident = basehaz(haz_fit_non_resident, centered = F)
+
+summary(haz_fit_non_resident)
+
+ggplot(base_haz_non_resident, aes(x = time, y = hazard))+
+  geom_line()+
+  labs(x = "Days", 
+       y = "Hazard", 
+       title = "Baseline Hazard Function for Out-Patient")+
+  scale_x_continuous(breaks = breaks, limits = c(0, 820))
+```
+
+> nitial Increase: The hazard for Out-Patients increases gradually from day 6, unlike the sharp rise seen for In-Patients around the same time.
+>
+> Steady Climb: The Out-Patient hazard continues to rise steadily, reaching a peak around day 800. In contrast, the In-Patient hazard showed a sharp increase around day 500.
+>
+>Overall Risk: The maximum hazard for Out-Patients remains below `0.6`, whereas for In-Patients, it reaches above `0.9`, indicating a **higher overall risk for In-Patients**.
+
+### Fit the cumulative hazard function and interpret the results
+
+#### Nelson-Alen
+
+```{r}
+library(survival)
+ggsurvplot(km_fit, fun = "cumhaz",
+           xlab = "Days", 
+           ylab = "Cumulative Hazard",
+           title = "Nelson-Aalen Cumulative Hazard Curve",
+           xlim = c(0, 900))
+```
+
+#### Split to In-Patient
+
+```{r}
+km_fit_resident = survfit(Surv(time = duration, event = event_observed)~1, data = clean_resident)
+summary(km_fit_resident)
+ggsurvplot(km_fit_resident, data = clean_resident,
+           conf.int = TRUE,
+            risk.table = TRUE,
+           risk.table.col = "strata",
+           ggtheme = theme_bw(),
+           palette = c("#E7B800", "#2E9FDF"),
+           xlab = "Days",
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve")$plot +
+  scale_x_continuous(breaks = breaks, limits = c(0, 820))
+```
+
+```{r}
+ggsurvplot(km_fit_resident, fun = "cumhaz",
+           xlab = "Days", 
+           ylab = "Cumulative Hazard",
+           title = "Nelson-Aalen Cumulative Hazard Curve In-Patient")
+```
+
+#### Split to Out-Patient
+
+```{r}
+km_fit_non_resident = survfit(Surv(time = duration, event = event_observed)~1, data = clean_non_resident)
+summary(km_fit_non_resident)
+ggsurvplot(km_fit_non_resident, data = clean_non_resident,
+           pval = TRUE, conf.int = TRUE,
+            risk.table = TRUE,
+           risk.table.col = "strata",
+           ggtheme = theme_bw(),
+           palette = c("#E7B800", "#2E9FDF"),
+           xlab = "Days",
+           ylab = "Survival Probability",
+           title = "Kaplan-Meier Survival Curve",
+           xlim = c(0, 900))
+```
+
+```{r}
+ggsurvplot(km_fit_non_resident, fun = "cumhaz",
+           xlab = "Days", 
+           ylab = "Cumulative Hazard",
+           title = "Nelson-Aalen Cumulative Hazard Curve Out-Patient",
+           xlim = c(0, 900))
+```
+
+### Re-code the columns AN, AO, AP, AQ, AR, AS, AT, AU, AV to have
+
+> Not Difficult [0]
+>
+> Somewhat [1]
+>
+> Very Difficult [2]
+>
+> Extremely Difficult [3]
+
+### Then introduce a new variable of the sum such that if the sum is
+
+> |  sum  |            Meaning |
+> |:-----:|-------------------:|
+> | 0- 4  |      None/ minimal |
+> |  5-9  |     mild depressed |
+> | 10-14 | moderate depressed |
+> | 15-19 |    moderate severe |
+> | 20-27 |  severe depression |
+
+### Get the unique values in each column
+
+```{r}
+cols_depression = c("Pleasure_doingthings", "Depressed", "Sleep", "Energy",      "Appetite", "Bad_About_Myself", "Concentration", "Speak_Slowly",            "Thoughts")
+
+unique_values = lapply(clean_Data[cols_depression], unique)
+
+unique_values
+```
+
+### Recode the column names
+
+```{r}
+clean_Data <- clean_Data %>%
+  mutate(across(all_of(cols_depression), ~ case_when(
+    .x %in% c("s", "S") ~ "Somewhat",
+    .x %in% c("n", "N") ~ "Not difficult",
+    .x %in% c("e", "E") ~ "Extremely difficult",
+    TRUE ~ .x
+  )))
+
+```
+
+```{r}
+unique_values = lapply(clean_Data[cols_depression], unique)
+
+unique_values
+```
+
+### Recode columns to numeric and find the row sum
+
+```{r}
+clean_Data = clean_Data %>%
+  mutate(across(all_of(cols_depression), ~ ifelse(.x == "Not difficult", 0,
+                                         ifelse(.x == "Somewhat", 1,
+                                         ifelse(.x == "Very difficult", 2,
+                                         ifelse(.x == "Extremely difficult", 3, NA))))))
+```
+
+```{r}
+unique_values = lapply(clean_Data[cols_depression], unique)
+
+unique_values
+```
+
+### Create a new column of the rowwise sum
+
+```{r}
+clean_Data = clean_Data %>% rowwise() %>%
+  mutate(dep_ind = sum(c_across(all_of(cols_depression)), na.rm = TRUE)) %>%
+  ungroup()
+
+depression_index = as.data.frame(table(clean_Data$dep_ind))
+depression_index
+```
+
+### Recode the depression column
+
+```{r}
+clean_Data = clean_Data %>% mutate(dep_lvl = case_when(
+  dep_ind >= 0 & dep_ind <= 4 ~ "None_minimal",
+  dep_ind >= 5 & dep_ind <= 9 ~ "Mild Depression",
+  dep_ind >= 10 & dep_ind <= 14 ~ "Moderate Depression",
+  dep_ind >= 15 & dep_ind <= 19 ~ "Moderate Severe",
+  dep_ind >= 20 & dep_ind <= 27 ~ "Severe Depression",
+  T~ NA_character_
+))
+
+depression_level = as.data.frame(table(clean_Data$dep_lvl))
+depression_level
+```
+
+## Question 2
+
+### Using appropriate visualization techniques, present the relationship between Age of patient and age of client/ caregiver
+
+```{r}
+library(tidyverse)
+
+
+ages <- clean_Data %>% select(Age, Age_Client)
+summary(ages)
+```
+
+```{r}
+ggplot(ages, aes(x = Age, y = Age_Client)) +
+  geom_point() +
+  labs(title = "Relationship between Age of Patient and Age of Client",
+       x = "Age of Patient",
+       y = "Age of Client") +
+  theme_minimal()
+```
+
+From the graph it appears there is no relationship between the age of the client and the age of the patient. This is because there is no recognizable pattern in the graph
+
+We can confirm this using a correlation test and a covariation test
+
+```{r}
+cor(ages)
+```
+
+```{r}
+cov(ages)
+```
+
+The tests back up the claim of no relationship as they only have 1 in the intra-age variation and NA in the inter age relationship.
+
+### For Q41: Which disease or medical conditions did the patient have before being admitted at Care 360? (tick that applies). See columns BN, BP, BR, BT, BV, BX, BZ, CB, CD, CF, CH, CJ, CL, CN, CP, CR, CT, CV
+
+#### DO bar chart frequencies for the categories
+
+> 1.  Chronic Cardiac disease (not hypertension)
+> 2.  Hypertension
+> 3.  Chronic pulmonary disease including Asthma/ Bronchitis/COPD
+> 4.  Chronic Kidney Disease
+> 5.  Obesity
+> 6.  Liver Disease
+> 7.  Chronic neurological disorder
+> 8.  Diabetes Mellitus
+> 9.  Rheumatologic disorder
+> 10. Tuberculosis
+> 11. HIV and AIDS
+> 12. Arthritis
+> 13. Stroke
+> 14. Cancer
+> 15. Mental health including depression and anxiety
+> 16. Advanced Age
+> 17. After Surgery
+> 18. Fracture
+
+```{r}
+diseases = Patient_Data %>%
+  select(Facility_Type,
+         Cardiac_Condition, 
+         Hypertention_Condition, 
+         Pulmonary_Condition, 
+         Kidney_Condition...72, 
+         Obesity, 
+         Liver_Condition, 
+         Neurological_Disorder, 
+         Diabetes, 
+         Rheumatology, 
+         TB, 
+         HIV, 
+         Athritis, 
+         Stroke, 
+         Cancer, 
+         `Mental and Dementia`, 
+         Advanced_Age, 
+         After_Surgery, 
+         Fracture)
+
+
+long_diseases = diseases %>%
+  pivot_longer(cols = -Facility_Type, names_to = "Condition", values_to = "Presence")
+long_diseases
+
+
+
+condition_counts <- long_diseases %>%
+  filter(Presence == "Yes") %>%
+  count(Condition, Facility_Type, sort = TRUE)
+
+
+
+condition_counts
+
+ggplot(condition_counts, aes(x = reorder(Condition, n), y = n, fill = Facility_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+   scale_fill_manual(values = c("In-Patient" = "orange", "Out-Patient" = "darkgreen")) +
+  coord_flip() +
+  labs(title = "Frequencies of Pre-existing Conditions Among Patients",
+       x = "Medical Condition",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+### For Q.43: At Care 360, did they detect any health condition which the patient was not aware of before -merge Not Sure and No-.For those who said yes do a barchart on the frequency for column CZ, DA, DB, DC, DD, DE, DF, DG, DH, DI, DJ, DK, DL, DM, DN, DO, DP
+
+```{r}
+Patient_Data <- Patient_Data %>%
+  mutate(Other_Detected = ifelse(!is.na(Other_Detected) & Other_Detected != "", "Yes", "No"))
+
+selected_columns <- Patient_Data %>%
+  select(Facility_Type,
+         Cardiac_Detected, 
+         Hypertention_Detected, 
+         Pulmonary_Detected, 
+         Kidney_Condition...107, 
+         Obesity_Detected, 
+         Liver_Detected, 
+         Neurological_Detected, 
+         Diabetes_Detected, 
+         Rheumatology_Detected, 
+         TB_Detected, 
+         HIV_Detected, 
+         Athritis_Detected, 
+         Stroke_Detected, 
+         Cancer_Detected, 
+         Mental_Detected, 
+         Age_Detected, 
+         Other_Detected)
+
+long_detected <- selected_columns %>%
+  pivot_longer(cols = -Facility_Type, names_to = "Condition", values_to = "Presence")
+long_detected
+
+detected_condition_counts <- long_detected %>%
+  filter(Presence == "Yes") %>%
+  count(Condition,Facility_Type, sort = TRUE)
+
+detected_condition_counts = na.omit(detected_condition_counts)
+detected_condition_counts
+
+ggplot(detected_condition_counts, aes(x = reorder(Condition, n), y = n, fill = Facility_Type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+   scale_fill_manual(values = c("In-Patient" = "orange", "Out-Patient" = "darkgreen")) +
+  coord_flip() +
+  labs(title = "Frequencies of Detected Conditions Among Patients",
+       x = "Medical Condition",
+       y = "Frequency") +
+  theme_minimal()
+
+```
+
+### Compare the survival curves for those who said NO and those who said yes above
+
+```{r}
+columns_int = c("Cardiac_Detected", 
+         "Hypertention_Detected",
+         "Pulmonary_Detected",
+         "Kidney_Condition...107",
+         "Obesity_Detected",
+         "Liver_Detected",
+         "Neurological_Detected",
+         "Diabetes_Detected",
+         "Rheumatology_Detected",
+         "TB_Detected",
+         "HIV_Detected",
+         "Athritis_Detected",
+         "Stroke_Detected",
+         "Cancer_Detected",
+         "Mental_Detected",
+         "Age_Detected",
+         "Other_Detected")
+```
+
+#### Fit the model
+
+```{r}
+interest_disease = clean_Data %>%
+  select(duration,
+         event_observed,
+         Facility_Type,
+         Cardiac_Detected, 
+         Hypertention_Detected, 
+         Pulmonary_Detected, 
+         Kidney_Condition...107, 
+         Obesity_Detected, 
+         Liver_Detected, 
+         Neurological_Detected, 
+         Diabetes_Detected, 
+         Rheumatology_Detected, 
+         TB_Detected, 
+         HIV_Detected, 
+         Athritis_Detected, 
+         Stroke_Detected, 
+         Cancer_Detected, 
+         Mental_Detected, 
+         Age_Detected, 
+         Other_Detected)
+interest_disease <- interest_disease %>%
+  mutate(Other_Detected = ifelse(!is.na(Other_Detected) & Other_Detected != "", "Yes", "No"))
+
+```
+
+```{r}
+surv_disease <- Surv(interest_disease$duration, interest_disease$event_observed)
+```
+
+#### Count the columns that can be assessed for comparison
+
+```{r}
+interest_disease_count = interest_disease %>%
+  mutate(across(all_of(columns_int), ~ ifelse(!is.na(.) & . != "", "Yes", ifelse(is.na(.), NA, "No"))))
+
+count_response = interest_disease_count %>%
+  pivot_longer(cols = all_of(columns_int), names_to = "Disease", values_to = "Detection") %>%
+  group_by(Disease, Detection) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  pivot_wider(names_from = Detection, values_from = Count, values_fill = list(Count = 0))
+
+count_response
+```
+
+Because the responses are either `Yes` or `NA`. NA shall be converted to No to indicate that the disease was not detected in the population
+
+```{r}
+interest_disease = interest_disease %>% 
+  mutate(across(all_of(columns_int), ~ifelse(is.na(.) |. == "", "No", "Yes")))
+```
+
+#### Fit model
+```{r}
+surv_dses = Surv(time = interest_disease$duration, event = interest_disease$event_observed)
+```
+
+##### Survival function
+
+The minimum data that can be used for a survival function is 5 data units 
+The data generated from detecting conditions has sets with only one respondent so we should be careful not to include it in the survival function otherwise we may face the 
+
+> Error: Inconsistent lengths found in column Cardiac_Detected
+
+
+
+
+```{r}
+data_yes_list <- list()
+data_no_list <- list()
+disease_columns = colnames(interest_disease[,4:ncol(interest_disease)])
+
+min_required_yes <- 5
+min_required_no <- 5
+
+filtered_columns <- disease_columns[sapply(disease_columns, function(col) {
+  yes_count <- sum(interest_disease[[col]] == "Yes")
+  no_count <- sum(interest_disease[[col]] == "No")
+  yes_count >= min_required_yes && no_count >= min_required_no
+})]
+
+
+for (col in filtered_columns) {
+  data_yes_list[[col]] <- interest_disease %>% filter(get(col) == "Yes")
+  data_no_list[[col]] <- interest_disease %>% filter(get(col) == "No")
+}
+```
+
+```{r}
+fit_and_plot <- function(column, data_yes, data_no) {
+  formula <- as.formula(paste("Surv(time = duration, event = event_observed)~", column))
+  
+  # Fit the survival curves for "Yes" and "No" subsets
+  fit_yes <- survfit(formula, data = as.data.frame(data_yes))
+  fit_no <- survfit(formula, data = as.data.frame(data_no))
+  
+  # Plot the survival curves
+  ggsurvplot(list(Yes = fit_yes, No = fit_no), 
+             data = interest_disease, 
+             conf.int = TRUE, 
+             pval = TRUE, 
+             risk.table = TRUE, 
+             linetype = "strata", 
+             surv.median.line = "hv", 
+             ggtheme = theme_minimal(), 
+             title = paste("Survival Curve for", column))
+}
+
+```
+
+##### Fit
+
+```{r}
+filtered_columns
+```
+```{r}
+interest_disease$Hypertention_Detected = as.factor(interest_disease$Hypertention_Detected)
+fit = surv_fit(surv_dses~Hypertention_Detected, data = interest_disease)
+ggsurvplot(fit, 
+             data = interest_disease, 
+             conf.int = TRUE, 
+             pval = TRUE, 
+             risk.table = TRUE, 
+             linetype = "strata", 
+             surv.median.line = "hv", 
+             ggtheme = theme_minimal(), 
+             title = "Survival Curve for (Hypertention Detected)",
+           xlim = c(0, 900))
+```
+
+```{r}
+interest_disease$Mental_Detected = as.factor(interest_disease$Mental_Detected)
+fit = surv_fit(surv_dses~Mental_Detected, data = interest_disease)
+ggsurvplot(fit, 
+             data = interest_disease, 
+             conf.int = TRUE, 
+             pval = TRUE, 
+             risk.table = TRUE, 
+             linetype = "strata", 
+             surv.median.line = "hv", 
+             ggtheme = theme_minimal(), 
+             title = "Survival Curve for (Mental Illness Detected)",
+           xlim = c(0, 900))
+```
+
+> From the data with high response in `yes` the p-value for the log-rank test is very high with the lowest detected being `0.56` which is above the 5% confidence level for log rank to fail to reject the null hypothesis
+> In this case we reject $H_0$ for all the data points and conclude that there is a statistically significant difference in the survival rate for individuals with any condition detected after the study begun
+
+
+
+### Summarise the variable : Q.35: What is the main reason that made you bring your patient to care 360 column BH
+
+```{r}
+reason_to_join = as.data.frame(table(Patient_Data$Reason_Caregiver))
+reason_to_join
+```
+
+```{r}
+library(ggplot2)
+
+reason_to_join <- as.data.frame(table(Patient_Data$Reason_Caregiver))
+
+names(reason_to_join) <- c("Reason", "Count")
+
+ggplot(reason_to_join, aes(x = Reason, y = Count)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Reasons for Joining",
+       x = "Reason",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+reasons <- c("Accessibility", "Adequate care", "Assist", "Better care", 
+             "Care and support", "Chronic Condition", "Close monitoring", 
+             "Close monitoring epilepsy", "Companionship", "Companionship and care", 
+             "Companionship and support", "Compassionate", "Condition", 
+             "Convinience", "Extra help", "Family engagement", "Loneliness", 
+             "Management", "Monitoring", "ompnaionship and post care", 
+             "Patient Condition", "Patient discharged", "Patient lives alone", 
+             "Peace of Mind", "Personalised Care", "Post care", "Post Hospital Care", 
+             "Post surgery", "Preference", "Provide Care", "Recommended by a doctor", 
+             "Recovery", "Specialised care", "Supervission", "Support", "Total Care")
+
+categories <- list(
+  "Patient condition" = c("Patient Condition", "Specialised care", "Condition", "Recommended by a doctor", "Chronic Condition"),
+  "Care and support" = c("Care and support", "Support", "Assist", "Provide Care", "Extra help", "Better care"),
+  "Companionship" = c("Companionship", "Loneliness", "Companionship and care", "Companionship and support", "Compassionate"),
+  "Convenience" = c("Convinience", "Family engagement", "Patient lives alone", "Accessibility", "Peace of Mind", "Preference"),
+  "Recovery" = c("Recovery", "Post surgery", "Management", "Patient discharged", "Post care", "Post Hospital Care"),
+  "Total Care" = c("Total Care", "Adequate care", "Personalised Care"),
+  "Monitoring" = c("Monitoring", "Close monitoring", "Supervission")
+)
+
+reason_to_category <- unlist(lapply(names(categories), function(category) {
+  setNames(rep(category, length(categories[[category]])), categories[[category]])
+}))
+
+
+plot_reasons_percentage <- function(data, title) {
+  data$Reason_Caregiver_Category <- reason_to_category[data$Reason_Caregiver]
+  
+ 
+  reason_to_join_category <- as.data.frame(table(data$Reason_Caregiver_Category))
+  names(reason_to_join_category) <- c("Category", "Count")
+  
+
+  total_responses <- sum(reason_to_join_category$Count)
+  reason_to_join_category$Percentage <- (reason_to_join_category$Count / total_responses) * 100
+  
+  
+  ggplot(reason_to_join_category, aes(x = Category, y = Percentage)) +
+    geom_bar(stat = "identity") +
+    theme_minimal() +
+    labs(title = title,
+         x = "Category",
+         y = "Percentage (%)") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+```
+
+```{r}
+resident <- Patient_Data %>% filter(Facility_Type == "In-Patient")
+non_resident <- Patient_Data %>% filter(Facility_Type == "Out-Patient")
+```
+
+```{r}
+plot_residents <- plot_reasons_percentage(resident, "Summarized Reasons for Joining (In-Patients)")
+print(plot_residents)
+```
+
+```{r}
+plot_non_residents <- plot_reasons_percentage(non_resident, "Summarized Reasons for Joining (Out-Patients)")
+print(plot_non_residents)
+```

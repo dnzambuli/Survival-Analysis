@@ -1,0 +1,690 @@
+---
+title: "Group WRK"
+author: "Waimiri Joseph Romeo 665258 Nzambuli Daniel 665721"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Bar chart(%) patient highest Completed Education Level
+
+```{r}
+library(readxl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+
+Patient_Data <- read_excel("Task2_data.xlsx")
+head(Patient_Data)
+```
+
+```{r}
+calculate_percentage <- function(data, column_name) {
+  data <- as.data.frame(table(data[[column_name]]))
+  data$Percentage = data$Freq / sum(data$Freq) * 100
+  colnames(data) <- c("Level_of_Education", "Number_of_Patients", "Percentage")
+  data <- data[order(data$Percentage), ]
+  return(data)
+}
+```
+
+```{r}
+#calculating percentage data
+Education_data <- calculate_percentage(Patient_Data, "Client_Education")
+
+Home_Care_Edu <- Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  calculate_percentage("Client_Education")
+
+In_patient_Edu <- Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  calculate_percentage("Client_Education")
+```
+
+```{r}
+#creating a function to plot the bar graph
+create_percentage_bar_graph <- function(data, y_col) {
+  ggplot(data, aes(x = Level_of_Education, y = Percentage, fill = Level_of_Education)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(x = "Level of Education", y = y_col, title = paste("Percentage of", y_col, "by Education Level")) +
+    scale_y_continuous(breaks = seq(0, 100, 10)) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_text(aes(label = sprintf("%.1f%%", Percentage)), hjust = -0.1)
+}
+```
+
+```{r fig.width=13, fig.height=20}
+plot_all_patients <- create_percentage_bar_graph(Education_data, "Patients")
+plot_homecare <- create_percentage_bar_graph(Home_Care_Edu, "HomeCare Patients")
+plot_inpatient <- create_percentage_bar_graph(In_patient_Edu, "InPatient Patients")
+
+ggarrange(plot_all_patients, plot_homecare, plot_inpatient, 
+          labels = c("All", "HomeCare", "InPatient"), 
+          ncol = 1, nrow = 3)
+```
+
+# 6. Bar chart (When it was suggested that the patient requires a caregiver, what was your reaction)
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+
+# Load the data
+Patient_Data <- read_excel("Task2_data.xlsx")
+as.data.frame(table(Patient_Data$Initial_Reaction)) 
+```
+
+```{r}
+# Define the expected values for Initial_Reaction
+reaction_levels <- c("Happy", "In different", "Didn’t Like it", "Was forced")
+
+# Convert Initial_Reaction to factor with defined levels
+Patient_Data$Initial_Reaction <- factor(Patient_Data$Initial_Reaction, levels = reaction_levels)
+as.data.frame(table(Patient_Data$Initial_Reaction))  
+```
+
+```{r}
+# Function to calculate percentages and format data
+calculate_percentage <- function(data, column_name) {
+  data <- as.data.frame(table(data[[column_name]]))
+  data$Percentage = data$Freq / sum(data$Freq) * 100
+  colnames(data) <- c("Reaction", "Frequency", "Percentage")
+  data <- data[order(factor(data$Reaction, levels = reaction_levels)), ]
+  return(data)
+}
+
+# Calculate percentage data for all patients
+Initial_Reaction_Data <- calculate_percentage(Patient_Data, "Initial_Reaction")
+
+# Calculate percentage data for Home Care patients
+HomeCare_Initial_Reaction <- Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  calculate_percentage("Initial_Reaction")
+
+# Calculate percentage data for Inpatient patients
+Inpatient_Initial_Reaction <- Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  calculate_percentage("Initial_Reaction")
+```
+
+```{r}
+# Function to create bar graph with percentage labels
+create_percentage_bar_graph <- function(data, y_col) {
+  ggplot(data, aes(x = Reaction, y = Percentage, fill = Reaction)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(x = "Initial Reaction", y = y_col, title = paste("Percentage of", y_col, "by Initial Reaction")) +
+    scale_y_continuous(breaks = seq(0, 100, 10)) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_text(aes(label = sprintf("%.1f%%", Percentage)), hjust = -0.1)
+}
+```
+
+```{r}
+create_frequency_bar_graphs = function(data, x_col, y_col){
+  y_lab = y_col
+  x_lab =  x_col
+  ttl = paste(y_lab, "by", x_lab)
+  ggplot(data, aes_string(x = x_col, y = y_col, fill = x_col)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  labs(x = x_lab, y = y_lab, title = ttl) +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5))
+}
+```
+
+```{r fig.width=13, fig.height=20}
+# Create the plots
+plot_all_patients <- create_frequency_bar_graphs(Initial_Reaction_Data, "Reaction", "Frequency")# create_percentage_bar_graph(Initial_Reaction_Data, "Patients")
+plot_homecare <- create_frequency_bar_graphs(HomeCare_Initial_Reaction, "Reaction", "Frequency")# create_percentage_bar_graph(HomeCare_Initial_Reaction, "HomeCare Patients")
+plot_inpatient <- create_frequency_bar_graphs(Inpatient_Initial_Reaction, "Reaction", "Frequency")# create_percentage_bar_graph(Inpatient_Initial_Reaction, "InPatient Patients")
+
+# Arrange the plots using ggarrange
+ggarrange(plot_all_patients, plot_homecare, plot_inpatient, 
+          labels = c("All", "HomeCare", "Inpatient"), 
+          ncol = 1, nrow = 3)
+```
+
+# Bar chart (%) Q47. what is your most preferred care arrangement
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Preferred_Care = str_replace_all(Preferred_Care, "Homecare provided by a Healthcare Provider", "Homecare Provided by a Healthcare Provider"),
+         Preferred_Care = str_replace_all(Preferred_Care, "Homecare Provided by family member", "Homecare under a family member")
+         )
+```
+
+```{r}
+ordered_data <- Patient_Data %>%
+  group_by(Preferred_Care) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  ungroup()
+ordered_preferred_care <- ordered_data$Preferred_Care
+ordered_preferred_care
+```
+
+```{r}
+preferred_care_levels <- c("Homecare Provided by a Healthcare Provider", "Step down Facility", "Homecare under a family member", "Hospital Setting", "Any other facility that offer homecare")
+
+calculate_percentage <- function(data, column_name) {
+  data <- as.data.frame(table(data[[column_name]]))
+  data$Percentage <- data$Freq / sum(data$Freq) * 100
+  colnames(data) <- c("Preferred_Care", "Frequency", "Percentage")
+  # Sort by Percentage
+  data <- data[order(data$Percentage), ]
+  # Ensure the Preferred_Care is ordered by predefined levels
+  data$Preferred_Care <- factor(data$Preferred_Care, levels = preferred_care_levels)
+  return(data)
+}
+
+# Sample Patient_Data for testing
+Patient_Data <- data.frame(
+  Preferred_Care = c("Homecare Provided by a Healthcare Provider", "Step down Facility", "Homecare under a family member", "Hospital Setting", "Any other facility that offer homecare", "Homecare Provided by a Healthcare Provider", "Hospital Setting"),
+  Facility_Type = c("Home-care", "Home-care", "Inpatient", "Home-care", "Inpatient", "Inpatient", "Home-care")
+)
+
+# Calculate percentage data for all patients
+Preferred_Care_Data <- calculate_percentage(Patient_Data, "Preferred_Care")
+
+# Calculate percentage data for Home Care patients
+HomeCare_Preferred_Care <- Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  calculate_percentage("Preferred_Care")
+
+# Calculate percentage data for Inpatient patients
+Inpatient_Preferred_Care <- Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  calculate_percentage("Preferred_Care")
+
+# Display the results
+Preferred_Care_Data
+HomeCare_Preferred_Care
+Inpatient_Preferred_Care
+
+```
+
+```{r fig.width=13, fig.height=20}
+create_percentage_bar_graph <- function(data, y_col) {
+  ggplot(data, aes(x = Preferred_Care, y = Percentage, fill = Preferred_Care)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(x = "Preferred Care", y = y_col, title = paste("Percentage of", y_col, "by Initial Reaction")) +
+    scale_y_continuous(breaks = seq(0, 100, 10)) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_text(aes(label = sprintf("%.1f%%", Percentage)), hjust = -0.1)
+}
+# Create the plots
+plot_all_patients <- create_percentage_bar_graph(Preferred_Care_Data, "Patients")
+plot_homecare <- create_percentage_bar_graph(HomeCare_Preferred_Care, "Home-care Patients")
+plot_inpatient <- create_percentage_bar_graph(Inpatient_Preferred_Care, "InPatient Patients")
+
+# Arrange the plots using ggarrange
+ggarrange(plot_all_patients, plot_homecare, plot_inpatient,
+          labels = c("All", "B", "C"),
+          ncol = 1, nrow = 3)
+```
+
+## 4. Bar chart for clients gross income
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+
+# Load the data
+Patient_Data <- read_excel("Task2_data.xlsx")
+```
+
+```{r}
+# Clean and correct client income values
+Patient_Data = Patient_Data %>%
+  mutate(Client_Income = str_remove_all(Client_Income, "[[:space:]]"),
+         Client_Income = str_replace_all(Client_Income, "5000,000", "500,000"),
+         Client_Income = str_replace_all(Client_Income, "500000", "500,000"),
+         Client_Income = str_replace_all(Client_Income, "200000", "200,000"),
+         Client_Income = str_replace_all(Client_Income, "3000,000", "300,000"),
+         Client_Income = str_replace_all(Client_Income, "101,000<150,000", "101,000-150,000"),
+         Client_Income = str_replace_all(Client_Income, "100,000-", "101,000-"),
+         Client_Income = str_replace_all(Client_Income, "200,000-", "201,000-"),
+         Client_Income = str_replace_all(Client_Income, "300,000-", "301,000-"),
+         Client_Income = str_replace_all(Client_Income, ">50,000", "<50,000"),
+         Client_Income = str_replace_all(Client_Income, "51,000", "50,000"),
+         Client_Income = str_replace_all(Client_Income, "10,000", "151,000"),
+         Client_Income = ifelse(str_detect(Client_Income, ">500,000"), ">500,000", Client_Income),
+         Client_Income = ifelse(str_detect(Client_Income, "<50,000"), "<50,000", Client_Income))
+```
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Income))
+```
+
+```{r}
+# Define the correct order of income levels
+income_levels <- c("<50,000", "50,000-100,000", "101,000-150,000", "151,000-200,000","201,000-300,000", "301,000-500,000", ">500,000")
+
+# Convert Client_Income to factor with defined levels
+Patient_Data$Client_Income <- factor(Patient_Data$Client_Income, levels = income_levels)
+```
+
+```{r}
+# Function to calculate percentages and format data
+calculate_percentage <- function(data, column_name) {
+  data <- as.data.frame(table(data[[column_name]]))
+  data$Percentage = data$Freq / sum(data$Freq) * 100
+  colnames(data) <- c("Income", "Frequency", "Percentage")
+  data <- data[order(factor(data$Income, levels = income_levels)), ]
+  return(data)
+}
+
+# Calculate percentage data for all patients
+Income_Data <- calculate_percentage(Patient_Data, "Client_Income")
+
+# Calculate percentage data for Home Care patients
+HomeCare_Income <- Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  calculate_percentage("Client_Income")
+
+# Calculate percentage data for Inpatient patients
+In_patient_Income <- Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  calculate_percentage("Client_Income")
+```
+
+```{r}
+# Function to create bar graph with percentage labels
+create_percentage_bar_graph <- function(data, y_col) {
+  ggplot(data, aes(x = Income, y = Percentage, fill = Income)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(x = "Client Income", y = y_col, title = paste("Percentage of", y_col, "by Client Income")) +
+    scale_y_continuous(breaks = seq(0, 100, 10)) +
+    theme_minimal() +
+    geom_text(aes(label = sprintf("%.1f%%", Percentage)), hjust = -0.1)
+}
+```
+
+```{r fig.width=20, fig.height=13}
+#  Create the plots
+plot_all_patients <- create_percentage_bar_graph(Income_Data, "Patients")
+plot_homecare <- create_percentage_bar_graph(HomeCare_Income, "HomeCare Patients")
+plot_inpatient <- create_percentage_bar_graph(In_patient_Income, "InPatient Patients")
+
+# Arrange the plots using ggarrange
+ggarrange(plot_all_patients, plot_homecare, plot_inpatient, 
+          labels = c("A", "B", "C"), 
+          ncol = 1, nrow = 3)
+```
+
+# Correlate (Size of client household Q 32 and Clients gross income)
+
+```{r}
+Patient_Data = Patient_Data %>% 
+  mutate(Client_Household = str_replace_all(Client_Household, "2to4", "2 to 4"))
+```
+
+```{r}
+corr_data = data.frame(income = Patient_Data$Client_Income,household = Patient_Data$Client_Household)
+table(corr_data)
+```
+
+```{r}
+corr_data = corr_data %>% mutate(
+  household = str_replace_all(household, ">7", "5<"),
+  household = str_replace_all(household, "5 to 7", "5<"),
+  household = str_replace_all(household, "1", "1 to 4"),
+  household = str_replace_all(household, "2 to 4", "1 to 4"),
+  income = str_replace_all(income, "<50,000", "0-100,000"),
+  income = str_replace_all(income, "50,000-100,000", "0-100,000"),
+)
+corr_data = na.omit(corr_data)
+
+table(corr_data)
+```
+
+The values to analyse do not include the row 3 and 4 because they have less than 5 on one entry
+
+```{r}
+table(corr_data)[-c(3, 4), ]
+
+```
+
+```{r}
+corr_data = corr_data[corr_data$income %in% c(">500,000", " 0-100,000 ", "201,000-300,000 ", "301,000-500,000"),]
+chisq.test(corr_data$income, corr_data$household)
+```
+
+income and household size have a statistically significant relationship
+
+```{r}
+library(vcd)
+mosaicplot(table(corr_data), main = "Mosaic Plot of Client Income vs. Household Size", color = c("red", "blue"))
+```
+
+# Univariate regression for
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Alcohol = ifelse(Alcohol %in% c("Often", "More often", "Less extent"), "Others", Alcohol))
+Patient_Data$Alcohol[1:10]
+
+Patient_Data$Length_Separated = factor(Patient_Data$Length_Separated, levels = c("<6m", "1<3", "3<5", "More than 5 years"))
+```
+
+```{r}
+HomeCare_data = Patient_Data %>% filter(Facility_Type == "Home-care")
+InPatient_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+```
+
+```{r}
+library(survival)
+cox_regression = function(data, response){
+  form = as.formula(paste("Surv(duration, event_observed) ~", response))
+  rex_cox =  coxph(formula = form, data = data)
+  return(summary(rex_cox))
+}
+```
+
+## 1. Client Income
+
+```{r}
+print("cox regression for ALL PATIENTS Client Income")
+cox_regression(Patient_Data, "Client_Income")
+```
+
+```{r}
+print("cox regression for IN-PATIENTS Client Income")
+cox_regression(InPatient_data, "Client_Income")
+```
+
+```{r}
+print("cox regression for HOMECARE PATIENTS Client Income")
+cox_regression(HomeCare_data, "Client_Income")
+```
+
+## 2. highest completed education level with categories 0-6
+
+```{r}
+cox_regression(Patient_Data, "Client_Education")
+```
+
+```{r}
+cox_regression(InPatient_data, "Client_Education")
+```
+
+```{r}
+cox_regression(HomeCare_data, "Client_Education")
+```
+
+> **Observation**\
+>
+> Secondary education is only significant in the case of `In-patient` care
+
+## 3. How long have you been separated [0-4]
+
+### Correct values
+
+> Expected values
+>
+> -   last six months
+>
+> -   more than six(6) months but less than one(1) year
+>
+> -   1 year - below 3 years
+>
+> -   3 years - below 5 years
+>
+> -   more than 5 years
+
+```{r}
+as.data.frame(table(Patient_Data$Length_Separated))
+```
+
+```{r}
+cox_regression(Patient_Data, "Length_Separated")
+```
+
+```{r}
+cox_regression(HomeCare_data, "Length_Separated")
+```
+
+```{r}
+cox_regression(InPatient_data, "Length_Separated")
+```
+
+## 4. Alcohol consumption [not at all 0, others 1]
+
+```{r}
+cox_regression(Patient_Data[!is.na(Patient_Data$Alcohol),], "Alcohol")
+```
+
+```{r}
+cox_regression(HomeCare_data[!is.na(HomeCare_data$Alcohol),], "Alcohol")
+```
+
+```{r}
+cox_regression(InPatient_data[!is.na(InPatient_data$Alcohol),], "Alcohol")
+```
+
+# Bar chart type of shift taken
+
+Data is in the column `Shift_Taken`
+
+The values expected are
+
+> 24 hours (Day and Night)
+>
+> Day
+>
+> Night
+
+```{r}
+as.data.frame(table(Patient_Data$Shift_Taken))
+```
+
+### plot data
+
+```{r}
+shift_taken = as.data.frame(table(Patient_Data$Shift_Taken))
+colnames(shift_taken) = c("shift", "frequency")  
+shift_taken = shift_taken[shift_taken$shift %in% as.factor(c("Day", "Day and Night", "Night")),] 
+shift_taken
+```
+
+### Plot
+
+```{r}
+create_frequency_bar_graphs(shift_taken,"shift", "frequency" )
+```
+
+### Shift by Homecare
+
+```{r}
+HomeCare_shift_taken = Patient_Data %>%   filter(Facility_Type == "Home-care") %>%   .$Shift_Taken %>%   table() %>%   as.data.frame() 
+colnames(HomeCare_shift_taken) = c("shift_taken", "frequency")    
+HomeCare_shift_taken 
+```
+
+### Shift by Income
+
+```{r}
+InPatient_shift_taken = Patient_Data %>%   filter(Facility_Type == "Inpatient") %>%   .$Shift_Taken %>%   table() %>%   as.data.frame() 
+colnames(InPatient_shift_taken) = c("shift_taken", "frequency")    
+InPatient_shift_taken 
+create_frequency_bar_graphs(InPatient_shift_taken, "shift_taken", "frequency")
+```
+
+## Cross tabulate shift taken by GENDER and Marital status (two tables)
+
+### cross tab function
+
+```{r}
+create_crosstab <- function(data, shift_col, res_col, facility_col) {
+  
+  # Helper function to process the data
+  process_data <- function(data, shift_col, res_col, facility_filter = NULL) {
+    if (!is.null(facility_filter)) {
+      data <- data %>% filter(!!sym(facility_col) == facility_filter)
+    }
+    data <- data %>%
+      filter(!is.na(!!sym(shift_col))) %>%
+      select(!!sym(shift_col), !!sym(res_col))
+    colnames(data) <- c("shift", "res")
+    return(data)
+  }
+  
+  # Process data for all patients
+  shift_by <- process_data(data, shift_col, res_col)
+  
+  # Process data for home-care patients
+  Homecare_shift_by <- process_data(data, shift_col, res_col, "Home-care")
+  
+  # Process data for inpatient patients
+  InPatient_shift_by <- process_data(data, shift_col, res_col, "Inpatient")
+  
+  # Create cross-tabulations
+  all_patient_crosstab <- as.data.frame(table(shift_by$res, shift_by$shift))
+  colnames(all_patient_crosstab) <- c(res_col, "Shift", "Count")
+  all_patient_crosstab <- all_patient_crosstab[order(all_patient_crosstab[[res_col]]), ]
+  
+  homecare_crosstab <- as.data.frame(table(Homecare_shift_by$res, Homecare_shift_by$shift))
+  colnames(homecare_crosstab) <- c(res_col, "Shift", "Count")
+  homecare_crosstab <- homecare_crosstab[order(homecare_crosstab[[res_col]]), ]
+  
+  inpatient_crosstab <- as.data.frame(table(InPatient_shift_by$res, InPatient_shift_by$shift))
+  colnames(inpatient_crosstab) <- c(res_col, "Shift", "Count")
+  inpatient_crosstab <- inpatient_crosstab[order(inpatient_crosstab[[res_col]]), ]
+  
+  return(list(
+    all_patients = all_patient_crosstab,
+    homecare_patients = homecare_crosstab,
+    inpatient_patients = inpatient_crosstab
+  ))
+}
+```
+
+```{r}
+gender_crosstab = create_crosstab(Patient_Data, "Shift_Taken", "Sex_Patient", "Facility_Type")
+print("Cross tablulation of ALL patients")
+gender_crosstab$all_patients
+```
+
+```{r}
+print("Cross tablulation of in-patients")
+gender_crosstab$inpatient_patients
+```
+
+```{r}
+print("Cross tablulation of Home-care patients")
+gender_crosstab$homecare_patients
+```
+
+### Marital status
+
+```{r}
+marital_crosstab = create_crosstab(Patient_Data, "Shift_Taken", "Marital", "Facility_Type")
+```
+
+```{r}
+print("Cross tablulation of ALL patients")
+marital_crosstab$all_patients
+```
+
+```{r}
+print("Cross tablulation of in-patients")
+marital_crosstab$inpatient_patients
+```
+
+```{r}
+print("Cross tablulation of Home-care patients")
+marital_crosstab$homecare_patients
+```
+
+## Q37. Cox regression for (How severe was the patient condition before engaging the caregiver)
+
+The expected value for `Patient_Severity`
+
+> -   Mild
+>
+> -   Severe
+>
+> -   Very Severe
+>
+> -   Not Applicable
+
+```{r}
+as.data.frame(table(Patient_Data$Patient_Severity))
+```
+
+```{r}
+cox_regression(Patient_Data, "Patient_Severity")
+```
+
+## Also for qn40(current_condition...18) \*chisquared
+
+```{r}
+current_condition_crosstab = create_crosstab(Patient_Data, "Shift_Taken", "Current_Condition...18", "Facility_Type")
+```
+
+### All Patients
+
+```{r}
+current_condition_crosstab$all_patients %>% filter(Count > 5)
+```
+
+```{r}
+library(tidyr)
+qn40_all_pat = as.table(as.matrix(current_condition_crosstab$all_patients %>% filter(Count > 5) %>% pivot_wider(names_from = Shift, values_from = Count)))
+
+chisq.test(table(qn40_all_pat))
+```
+
+### HomeCare
+
+```{r}
+current_condition_crosstab$homecare_patients%>% filter(Count > 5)
+```
+
+```{r}
+as.table(as.matrix(current_condition_crosstab$homecare_patients%>% filter(Count > 5) %>% pivot_wider(names_from = Shift, values_from = Count)))
+```
+
+```{r}
+qn40_home_pat = as.table(as.matrix(current_condition_crosstab$homecare_patients%>% filter(Count > 5) %>% pivot_wider(names_from = Shift, values_from = Count)))
+
+chisq.test(table(qn40_home_pat))
+```
+
+### InPatient
+
+```{r}
+current_condition_crosstab$inpatient_patients%>% filter(Count > 5)
+```
+
+```{r}
+as.table(as.matrix(current_condition_crosstab$inpatient_patients%>% filter(Count > 5) %>% pivot_wider(names_from = Shift, values_from = Count)))
+```
+
+> There is only one column so the chi-squared test will return `1` as there is nothing to compare with. also the In-Patient patients chose NA as a response for the current condition...18
+
+```{r}
+qn40_inpatient_pat = as.table(as.matrix(current_condition_crosstab$inpatient_patients%>% filter(Count > 5) %>% pivot_wider(names_from = Shift, values_from = Count)))
+
+chisq.test(table(qn40_inpatient_pat))
+```

@@ -1,0 +1,208 @@
+Split to resident
+
+{r}
+# clean_resident = clean_Data %>% filter(Facility_Type == "Resident")
+# clean_non_resident = clean_Data %>% filter(Facility_Type == "Non Resident")
+
+{r}
+# km_fit_resident = survfit(Surv(time = duration, event = event_observed)~1, data = clean_resident)
+# summary(km_fit_resident)
+# ggsurvplot(km_fit_resident, data = clean_resident, 
+#            pval = TRUE, conf.int = TRUE,
+#             risk.table = TRUE, 
+#            risk.table.col = "strata",
+#            ggtheme = theme_bw(), 
+#            palette = c("#E7B800", "#2E9FDF"),
+#            xlab = "Days", 
+#            ylab = "Survival Probability",
+#            title = "Kaplan-Meier Survival Curve")
+
+non resident
+
+{r}
+# km_fit_non_resident = survfit(Surv(time = duration, event = event_observed)~1, data = clean_non_resident)
+# summary(km_fit_non_resident)
+# ggsurvplot(km_fit_non_resident, data = clean_non_resident,
+#            pval = TRUE, conf.int = TRUE,
+#             risk.table = TRUE, 
+#            risk.table.col = "strata",
+#            ggtheme = theme_bw(), 
+#            palette = c("#E7B800", "#2E9FDF"),
+#            xlab = "Days", 
+#            ylab = "Survival Probability",
+#            title = "Kaplan-Meier Survival Curve")
+
+
+ALL
+
+{r}
+interest_disease <- interest_disease %>%
+  mutate(All_Diseases_Yes = if_all(.cols = all_of(disease_columns), ~ .x == "Yes"),
+         All_Diseases_No = if_all(.cols = all_of(disease_columns), ~ .x == "No"))
+
+
+
+fit_yes_Detected <- survfit(surv_disease ~ Facility_Type, data = interest_disease, subset = across(all_of(disease_columns)) == "Yes")
+fit_no_Detected <- survfit(surv_disease ~ Facility_Type, data = interest_disease, subset = across(all_of(disease_columns)) == "No")
+ggsurvplot(list(yes = fit_yes_Detected, no = fit_no_Detected), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+
+
+
+
+
+
+
+
+```{r}
+fit_yes <- survfit(surv_disease ~ Other_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no <- survfit(surv_disease ~ Other_Detected, data = interest_disease, subset = Other_Detected == "No")
+```
+
+#### Plot
+
+```{r}
+ggsurvplot(list(yes = fit_yes, no = fit_no), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal()) # Use a minimal theme
+```
+
+#### DO this for all columns
+
+```{r}
+disease_columns <- c("Cardiac_Detected", "Hypertention_Detected", "Pulmonary_Detected", 
+                     "Kidney_Condition...107", "Obesity_Detected", "Liver_Detected", 
+                     "Neurological_Detected", "Diabetes_Detected", "Rheumatology_Detected", 
+                     "TB_Detected", "HIV_Detected", "Athritis_Detected", "Stroke_Detected", 
+                     "Cancer_Detected", "Mental_Detected", "Age_Detected", "Other_Detected")
+
+```
+
+#### Find the detection count
+
+```{r}
+lapply(interest_disease[, disease_columns], unique)
+```
+
+#### Convert the na to no
+
+```{r}
+columns_to_replace <- c("Cardiac_Detected", "Hypertention_Detected", "Pulmonary_Detected",
+                        "Kidney_Condition...107", "Obesity_Detected", "Liver_Detected",
+                        "Neurological_Detected", "Diabetes_Detected", "Rheumatology_Detected",
+                        "TB_Detected", "HIV_Detected", "Athritis_Detected", "Stroke_Detected",
+                        "Cancer_Detected", "Mental_Detected", "Age_Detected")
+
+interest_disease <- interest_disease %>%
+  mutate(across(all_of(columns_to_replace), ~ifelse(is.na(.), "No", .)))
+```
+
+#### Confirm
+
+```{r}
+as.data.frame(lapply(interest_disease[, disease_columns], unique))
+```
+
+```{r}
+fit_yes_cardiac <- survfit(surv_disease ~ Cardiac_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_cardiac <- survfit(surv_disease ~ Cardiac_Detected, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_cardiac, no = fit_no_cardiac), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+
+#### On the hypertension
+
+```{r}
+fit_yes_Hypertention_Detected <- survfit(surv_disease ~ Hypertention_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_Hypertention_Detected <- survfit(surv_disease ~ Hypertention_Detected, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_Hypertention_Detected, no = fit_no_Hypertention_Detected), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+
+#### Pulmonary Detected
+
+```{r}
+# Pulmonary_Detected
+fit_yes_Pulmonary_Detected <- survfit(surv_disease ~ Pulmonary_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_Pulmonary_Detected <- survfit(surv_disease ~ Pulmonary_Detected, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_Pulmonary_Detected, no = fit_no_Pulmonary_Detected), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+
+#### Kidney Condition
+
+```{r}
+# Kidney_Condition...107
+fit_yes_Kidney_Condition...107 <- survfit(surv_disease ~ Kidney_Condition...107, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_Kidney_Condition...107 <- survfit(surv_disease ~ Kidney_Condition...107, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_Kidney_Condition...107, no = fit_no_Kidney_Condition...107), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+
+#### Obesity Detected
+
+```{r}
+# Obesity_Detected
+fit_yes_Obesity_Detected <- survfit(surv_disease ~ Obesity_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_Obesity_Detected <- survfit(surv_disease ~ Hypertention_Detected, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_Obesity_Detected, no = fit_no_Obesity_Detected), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+
+#### liver Detected
+
+```{r}
+# Liver_Detected
+fit_yes_Liver_Detected <- survfit(surv_disease ~ Liver_Detected, data = interest_disease, subset = Other_Detected == "Yes")
+fit_no_Liver_Detected <- survfit(surv_disease ~ Liver_Detected, data = interest_disease, subset = Other_Detected == "No")
+ggsurvplot(list(yes = fit_yes_Liver_Detected, no = fit_no_Liver_Detected), 
+           data = interest_disease, 
+           conf.int = TRUE, # Show confidence intervals
+           pval = TRUE, # Show p-value of the log-rank test
+           risk.table = TRUE, # Show risk table
+           linetype = "strata", # Different line types for strata
+           surv.median.line = "hv", # Show median survival
+           ggtheme = theme_minimal())
+```
+

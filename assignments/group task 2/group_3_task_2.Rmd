@@ -1,0 +1,868 @@
+---
+title: "Group 3 Task 2"
+author: "Nzambuli Daniel & Waimiri Romeo"
+date: "2024-07-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The data
+
+```{r}
+library(readxl)
+library(dplyr)
+library(stringr)
+Patient_Data <- read_excel("Task2_data.xlsx")
+head(Patient_Data)
+```
+
+# Bar chart(%) patient highest Completed Education Level
+
+```{r}
+Education_data = as.data.frame(table(Patient_Data$Client_Education))
+Education_data
+
+```
+
+### Convert the data to percentages
+
+```{r}
+Education_data$percentage = Education_data$Freq/ sum(Education_data$Freq) * 100
+Education_data
+```
+
+```{r}
+colnames(Education_data) = c("Level_of_Edu", "No_Patients", "Percentage_Patients")
+Education_data = Education_data[order(Education_data$Percentage_Patients),]
+Education_data
+```
+
+### Plot the bargraph
+
+```{r}
+library(ggplot2)
+ggplot(Education_data, aes(x = Level_of_Edu, y = Percentage_Patients, fill = Level_of_Edu)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  labs(x = "Level of Education", y = "Percentage of Patients", title = "Percentage of Patients by Education Level") +
+  scale_y_continuous(breaks = seq(0, 100, 10)) +
+  theme_minimal()
+```
+
+### Plotting function
+
+```{r}
+create_frequency_bar_graphs = function(data, x_col, y_col){
+  y_lab = y_col
+  x_lab =  x_col
+  ttl = paste(y_lab, "by", x_lab)
+  ggplot(data, aes_string(x = x_col, y = y_col, fill = x_col)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  labs(x = x_lab, y = y_lab, title = ttl) +
+  theme_minimal()
+}
+
+
+create_percentage_bar_graphs = function(data, x_col, y_col){
+  y_lab = y_col
+  x_lab = x_col
+  ttl = paste(y_lab, "by", x_lab)
+  ggplot(data, aes_string(x = x_col, y = y_col, fill = x_col)) +
+  geom_bar(stat = "identity") +
+  coord_flip()+
+  labs(x = x_lab, y = y_lab, title = ttl) +
+  scale_y_continuous(breaks = seq(0, 100, 10)) + #, labels = scales::percent
+  theme_minimal()
+}
+```
+
+### Education by Home Care
+
+```{r}
+Home_Care_Edu = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  .$Client_Education %>%
+  table() %>%
+  as.data.frame()
+
+Home_Care_Edu$Percentage = Home_Care_Edu$Freq / sum(Home_Care_Edu$Freq) * 100
+names(Home_Care_Edu) = c("Level_of_Edu", "No_Patients", "Perc_HomeCare_Patients")
+Home_Care_Edu
+```
+
+```{r}
+create_percentage_bar_graphs(Home_Care_Edu, "Level_of_Edu", "Perc_HomeCare_Patients")
+```
+
+### Education by in-patient
+
+```{r}
+In_patient_Edu = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  .$Client_Education %>%
+  table() %>%
+  as.data.frame()
+
+In_patient_Edu$Percentage = In_patient_Edu$Freq / sum(In_patient_Edu$Freq) * 100
+names(In_patient_Edu) = c("Level_of_Edu", "No_Patients", "Perc_InPatient_Patients")
+In_patient_Edu
+```
+
+```{r}
+create_percentage_bar_graphs(In_patient_Edu, "Level_of_Edu", "Perc_InPatient_Patients")
+```
+
+# Univariate cox regression for patient
+
+```{r}
+library(survival)
+cox_regression = function(data, response){
+  form = as.formula(paste("Surv(duration, event_observed) ~", response))
+  rex_cox =  coxph(formula = form, data = data)
+  return(summary(rex_cox))
+}
+```
+
+## 1. highest completed education level with categories 0-6
+
+### Create columns of level of education
+
+```{r}
+as.character(Education_data$Level_of_Edu)
+```
+
+### Confirm if the values are in the original data set columns
+
+```{r}
+as.character(Education_data$Level_of_Edu) %in% colnames(Patient_Data)
+```
+
+### Make columns of 1 and 0
+
+```{r}
+create_indicator_column <- function(data, column_name, match_value, new_column_name) {
+  data <- data %>%
+    mutate(!!new_column_name := if_else(!!sym(column_name) == match_value, 1, 0))
+  
+  return(data)
+}
+```
+
+### New columns
+
+```{r}
+columns_to_make = as.character(Education_data$Level_of_Edu)
+for(column in columns_to_make){
+  Patient_Data = create_indicator_column(Patient_Data, "Client_Education", column, column)
+}
+```
+
+### Confirm
+
+```{r}
+Patient_Data$Secondary
+```
+
+## All Data set coxph
+
+```{r}
+names(Patient_Data) = sapply(names(Patient_Data), function(name) {
+  if (name %in% columns_to_make) {
+    
+    gsub(" ", "_", name)
+  } else {
+    name
+  }
+})
+```
+
+```{r}
+interested = gsub(" ", "_", columns_to_make)
+for (column in interested){
+  print(paste("cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(Patient_Data, column))
+  cat("\n\n\n")
+}
+```
+
+## Home-stay coxph
+
+```{r}
+for (column in interested){
+  filtered_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+  print(paste("Home-stay cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(filtered_data, column))
+  cat("\n\n\n")
+}
+```
+
+## In-patient coxph
+
+```{r}
+for (column in interested){
+  filtered_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+  print(paste("Inpatient cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(filtered_data, column))
+  cat("\n\n\n")
+}
+```
+
+## 2. How long have you been separated [0-4]
+
+in the column `Length_Separated`
+
+```{r}
+as.data.frame(table(Patient_Data$Length_Separated))
+```
+
+### Correct values
+
+> Expected values
+>
+> -   last six months
+>
+> -   more than six(6) months but less than one(1) year
+>
+> -   1 year - below 3 years
+>
+> -   3 years - below 5 years
+>
+> -   more than 5 years
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Length_Separated = str_replace_all(Length_Separated, ">50,000", ">5"),
+         Length_Separated = ifelse(Length_Separated == "NA", NA, Length_Separated)
+         )
+```
+
+### confirm
+
+```{r}
+as.data.frame(table(Patient_Data$Length_Separated))
+```
+
+### Coxph data
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Length_Separated = ifelse(Length_Separated %in% c("<6m", ">5", "1<3", "3<5"), "Others", Length_Separated))
+Patient_Data = create_indicator_column(Patient_Data, "Length_Separated", "Others", "Separated_more_than_4yrs")
+```
+
+### Confirm
+
+```{r}
+Patient_Data$Separated_more_than_4yrs
+```
+
+## All Data set coxph
+
+```{r}
+print(paste("cox regression for: ", "Separated_more_than_4yrs"))
+cat("\n\n\n")
+print(cox_regression(Patient_Data, "Separated_more_than_4yrs"))
+```
+
+## Home-stay coxph
+
+```{r}
+filtered_home_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+print(paste("Home-stay cox regression for: ", "Separated_more_than_4yrs"))
+cat("\n\n\n")
+print(cox_regression(filtered_home_data, "Separated_more_than_4yrs"))
+```
+
+## In-patient coxph
+
+```{r}
+filtered_inpatient_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+print(paste(" cox regression for: ", "Separated_more_than_4yrs"))
+cat("\n\n\n")
+print(cox_regression(filtered_inpatient_data, "Separated_more_than_4yrs"))
+```
+
+## 3. Alcohol consumption [not at all 0, others 1]
+
+```{r}
+as.data.frame(table(Patient_Data$Alcohol))
+```
+
+```{r}
+sum(as.data.frame(table(Patient_Data$Alcohol))$Freq)
+```
+
+### coxph data
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Alcohol = ifelse(Alcohol %in% c("Often", "More often", "Less extent"), "Others", Alcohol))
+Patient_Data$Alcohol[1:10]
+```
+
+```{r}
+Patient_Data = create_indicator_column(Patient_Data, "Alcohol", "Others", "No_Alcohol")
+```
+
+### Confirm
+
+```{r}
+Patient_Data$No_Alcohol
+```
+
+## All Data set coxph
+
+```{r}
+print(paste("cox regression for: ", "No_Alcohol"))
+cat("\n\n\n")
+print(cox_regression(Patient_Data, "No_Alcohol"))
+```
+
+## Home-stay coxph
+
+```{r}
+filtered_home_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+print(paste(" cox regression for: ", "No_Alcohol"))
+cat("\n\n\n")
+print(cox_regression(filtered_home_data, "No_Alcohol"))
+```
+
+## In-patient coxph
+
+```{r}
+filtered_inpatient_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+print(paste(" cox regression for: ", "No_Alcohol"))
+cat("\n\n\n")
+print(cox_regression(filtered_inpatient_data, "No_Alcohol"))
+```
+
+## 4. Physical activities behavior [not at all 0, others 1]
+
+```{r}
+as.data.frame(table(Patient_Data$Physical_Activities))
+```
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Physical_Activities = ifelse(Physical_Activities %in% c("Often", "More often", "Less extent"), "Others", Physical_Activities))
+Patient_Data = create_indicator_column(Patient_Data, "Physical_Activities", "Others", "No_Physical_Activities")
+```
+
+## All Data set coxph
+
+```{r}
+print(paste("cox regression for: ", "No_Physical_Activities"))
+cat("\n\n\n")
+print(cox_regression(Patient_Data, "No_Physical_Activities"))
+```
+
+## Home-stay coxph
+
+```{r}
+filtered_home_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+
+print(paste(" cox regression for: ", "No_Physical_Activities"))
+cat("\n\n\n")
+print(cox_regression(filtered_home_data, "No_Physical_Activities"))
+```
+
+## In-patient coxph
+
+```{r}
+filtered_inpatient_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+
+print(paste(" cox regression for: ", "No_Physical_Activities"))
+cat("\n\n\n")
+print(cox_regression(filtered_inpatient_data, "No_Physical_Activities"))
+```
+
+## 5. Smoking [not at all 0, others 1]
+
+```{r}
+as.data.frame(table(Patient_Data$Smoking))
+```
+
+```{r}
+Patient_Data = create_indicator_column(Patient_Data, "Smoking", "Yes", "No_Smoking")
+```
+
+## All Data set coxph
+
+```{r}
+print(paste("cox regression for: ", "No_Smoking"))
+cat("\n\n\n")
+print(cox_regression(Patient_Data, "No_Smoking"))
+```
+
+## Home-stay coxph
+
+```{r}
+filtered_home_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+
+print(paste(" cox regression for: ", "No_Smoking"))
+cat("\n\n\n")
+print(cox_regression(filtered_home_data, "No_Smoking"))
+```
+
+## In-patient coxph
+
+```{r}
+filtered_inpatient_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+
+print(paste(" cox regression for: ", "No_Smoking"))
+cat("\n\n\n")
+print(cox_regression(filtered_inpatient_data, "No_Smoking"))
+```
+
+# Correlate (Size of client household Q 32 and Clients gross income)
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Household))
+```
+
+```{r}
+Patient_Data = Patient_Data %>% 
+  mutate(Client_Household = str_replace_all(Client_Household, "2to4", "2 to 4"))
+```
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Household))
+```
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Income))
+```
+
+### Correct values for client income
+
+The values expected are
+
+> \<50,000
+>
+> 51,000-100,000
+>
+> 101,000-150,000
+>
+> 151,000-200,000
+>
+> 201,000-300,000
+>
+> 300,000-500,000
+>
+> 500,000\<
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Client_Income = str_remove_all(Client_Income, "[[:space:]]"),
+         Client_Income = str_replace_all(Client_Income, "5000,000", "500,000"),
+         Client_Income = str_replace_all(Client_Income, "500000", "500,000"),
+         Client_Income = str_replace_all(Client_Income, "200000", "200,000"),
+         Client_Income = str_replace_all(Client_Income, "3000,000", "300,000"),
+         Client_Income = str_replace_all(Client_Income, "101,000<150,000", "101,000-150,000"),
+         Client_Income = str_replace_all(Client_Income, "100,000-", "101,000-"),
+         Client_Income = str_replace_all(Client_Income, "200,000-", "201,000-"),
+         Client_Income = str_replace_all(Client_Income, "300,000-", "301,000-"),
+         Client_Income = str_replace_all(Client_Income, ">50,000", "<50,000"),
+         Client_Income = str_replace_all(Client_Income, "51,000", "50,000"),
+         Client_Income = str_replace_all(Client_Income, "10,000", "151,000"),
+         Client_Income = ifelse(str_detect(Client_Income, ">500,000"), ">500,000", Client_Income),
+         Client_Income = ifelse(str_detect(Client_Income, "<50,000"), "<50,000", Client_Income))
+```
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Income))
+```
+
+### The correlation
+
+```{r}
+corr_data = data.frame(income = Patient_Data$Client_Income,household = Patient_Data$Client_Household)
+table(corr_data)
+```
+
+```{r}
+corr_data = corr_data %>% mutate(
+  household = str_replace_all(household, ">7", "5<"),
+  household = str_replace_all(household, "5 to 7", "5<"),
+  household = str_replace_all(household, "1", "1 to 4"),
+  household = str_replace_all(household, "2 to 4", "1 to 4"),
+  income = str_replace_all(income, "<50,000", "0-100,000"),
+  income = str_replace_all(income, "50,000-100,000", "0-100,000"),
+)
+corr_data = na.omit(corr_data)
+
+table(corr_data)
+```
+
+```{r}
+# correlation = cor(Patient_Data$Client_Household, Patient_Data$Client_Income, use = "complete.obs") 
+# correlation
+
+chisq.test(corr_data$income, corr_data$household)
+```
+
+income and household size have a statistically significant relationship
+
+```{r fig.width= 13}
+library(vcd)
+mosaicplot(table(corr_data), main = "Mosaic Plot of Client Income vs. Household Size", color = TRUE)
+
+```
+
+# Bar chart for clients gross income
+
+Data is in the column `Client_Income`
+
+The values expected are
+
+> \<50,000
+>
+> 51,000-100,000
+>
+> 101,000-150,000
+>
+> 151,000-200,000
+>
+> 201,000-300,000
+>
+> 300,000-500,000
+>
+> 500,000\<
+
+```{r}
+Income_Data = Patient_Data$Client_Income
+```
+
+### Check the data is clean
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Income))
+```
+
+### Relabel values
+
+### Confirm
+
+```{r}
+as.data.frame(table(Patient_Data$Client_Income))
+```
+
+### Create plot data
+
+```{r}
+customer_income = as.data.frame(table(Patient_Data$Client_Income))
+colnames(customer_income) = c("Income", "Frequency")
+```
+
+```{r}
+create_frequency_bar_graphs(customer_income, "Income", "Frequency")
+```
+
+### Income by in-patient
+
+```{r}
+In_patient_Income = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  .$Client_Income %>%
+  table() %>%
+  as.data.frame()
+
+
+names(In_patient_Income) = c("Client_Income", "InPatient_Freq")
+In_patient_Income
+```
+
+```{r}
+create_frequency_bar_graphs(In_patient_Income, "Client_Income", "InPatient_Freq")
+```
+
+### Income by home-care
+
+```{r}
+HomeCare_Income = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  .$Client_Income %>%
+  table() %>%
+  as.data.frame()
+
+
+names(HomeCare_Income) = c("Client_Income", "HomeCare_Freq")
+HomeCare_Income
+create_frequency_bar_graphs(HomeCare_Income, "Client_Income", "HomeCare_Freq")
+```
+
+# Univariate regression for
+
+## 1. Client Income
+
+```{r}
+Patient_Data <- Patient_Data %>%
+  mutate(
+    income_gt_500000 = as.integer(Client_Income == ">500,000"),
+    income_301000_500000 = as.integer(Client_Income == "301,000-500,000"),
+    income_101000_150000 = as.integer(Client_Income == "101,000-150,000"),
+    income_150000_200000 = as.integer(Client_Income == "150,000-200,000"),
+    income_lt_50000 = as.integer(Client_Income == "<50,000"),
+    income_201000_300000 = as.integer(Client_Income == "201,000-300,000"),
+    income_151000_200000 = as.integer(Client_Income == "151,000-200,000")
+  )
+```
+
+### Cox regression
+
+```{r}
+income_cols = c("income_gt_500000", "income_301000_500000", "income_101000_150000", "income_150000_200000", "income_lt_50000", "income_201000_300000", "income_151000_200000")
+
+for(column in income_cols){
+  # filtered_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+  print(paste("Inpatient cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(Patient_Data, column))
+  cat("\n\n\n")
+}
+```
+
+### Home-care
+
+```{r}
+for(column in income_cols){
+  filtered_data = Patient_Data %>% filter(Facility_Type != "Inpatient")
+  print(paste("Home-care cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(filtered_data, column))
+  cat("\n\n\n")
+}
+```
+
+### In-patient
+
+```{r}
+for(column in income_cols){
+  filtered_data = Patient_Data %>% filter(Facility_Type == "Inpatient")
+  print(paste("Inpatient cox regression for: ", column))
+  cat("\n\n\n")
+  print(cox_regression(filtered_data, column))
+  cat("\n\n\n")
+}
+```
+
+## 2. Q37. (How severe was the patient condition before engaging the caregiver)
+
+# Bar chart (When it was suggested that the patient requires a caregiver, what was your reaction)
+
+Data is in the column `Initial_Reaction`
+
+The values expected are
+
+> Happy
+>
+> In different
+>
+> Didn't like it at all
+>
+> Was Forced
+
+```{r}
+as.data.frame(table(Patient_Data$Initial_Reaction))
+```
+
+### Plot data
+
+```{r}
+initial_reaction = as.data.frame(table(Patient_Data$Initial_Reaction))
+colnames(initial_reaction) = c("Client_Reaction", "Frequency")
+initial_reaction
+```
+
+### Plot
+
+```{r}
+create_frequency_bar_graphs(initial_reaction,"Client_Reaction", "Frequency" )
+```
+
+### Initial reaction by homecare
+
+```{r}
+HomeCare_Initial_Reaction = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  .$Initial_Reaction %>%
+  table() %>%
+  as.data.frame()
+
+
+names(HomeCare_Initial_Reaction) = c("Client_Initial_Reaction", "HomeCare_Freq")
+HomeCare_Initial_Reaction
+create_frequency_bar_graphs(HomeCare_Initial_Reaction, "Client_Initial_Reaction", "HomeCare_Freq")
+```
+
+### Initial reaction by inpatient
+
+```{r}
+Inpatient_Initial_Reaction = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  .$Initial_Reaction %>%
+  table() %>%
+  as.data.frame()
+
+
+names(Inpatient_Initial_Reaction) = c("Client_Initial_Reaction", "Inpatient_Freq")
+Inpatient_Initial_Reaction
+create_frequency_bar_graphs(Inpatient_Initial_Reaction, "Client_Initial_Reaction", "Inpatient_Freq")
+```
+
+# Bar chart (%) Q47. what is your most preferred care arrangement
+
+Data is in the column `Preferred_care`
+
+The values expected are
+
+> Homecare under a family member/relative
+>
+> Homecare provided by a healthcare provider
+>
+> Hospital setting
+>
+> Step down facility like Care 360
+>
+> Other
+
+```{r}
+as.data.frame(table(Patient_Data$Preferred_Care))
+```
+
+combine
+
+> Homecare Provided by a Healthcare Provider -\> Homecare provided by a Healthcare Provider
+>
+> Homecare Provided by family member -\> Homecare under a family member
+
+```{r}
+Patient_Data = Patient_Data %>%
+  mutate(Preferred_Care = str_replace_all(Preferred_Care, "Homecare provided by a Healthcare Provider", "Homecare Provided by a Healthcare Provider"),
+         Preferred_Care = str_replace_all(Preferred_Care, "Homecare Provided by family member", "Homecare under a family member")
+         )
+```
+
+### Confirm
+
+```{r}
+as.data.frame(table(Patient_Data$Preferred_Care))
+```
+
+### plot data
+
+```{r}
+preferred_care = as.data.frame(table(Patient_Data$Preferred_Care))
+colnames(preferred_care) = c("preferred_care", "frequency")
+preferred_care$percentage = preferred_care$frequency/ sum(preferred_care$frequency) * 100
+preferred_care
+```
+
+### Plot
+
+```{r fig.width=13}
+create_percentage_bar_graphs(preferred_care, "preferred_care", "percentage")
+```
+
+### Preferred care for inpatient
+
+```{r}
+Inpatient_Preferred_Care = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  .$Preferred_Care %>%
+  table() %>%
+  as.data.frame()
+colnames(Inpatient_Preferred_Care) = c("preferred_care", "frequency")
+Inpatient_Preferred_Care$Inpatient_percentage = Inpatient_Preferred_Care$frequency/ sum(Inpatient_Preferred_Care$frequency) * 100
+
+
+Inpatient_Preferred_Care
+create_percentage_bar_graphs(Inpatient_Preferred_Care, "preferred_care", "Inpatient_percentage")
+```
+
+### preferred care by Homecare
+
+```{r fig.width=13}
+HomeCare_Preferred_Care = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  .$Preferred_Care %>%
+  table() %>%
+  as.data.frame()
+colnames(HomeCare_Preferred_Care) = c("preferred_care", "frequency")
+HomeCare_Preferred_Care$HomeCare_percentage = HomeCare_Preferred_Care$frequency/ sum(HomeCare_Preferred_Care$frequency) * 100
+
+
+HomeCare_Preferred_Care
+create_percentage_bar_graphs(HomeCare_Preferred_Care, "preferred_care", "HomeCare_percentage")
+```
+
+# Bar chart type of shift taken
+
+Data is in the column `Shift_Taken`
+
+The values expected are
+
+> 24 hours (Day and Night)
+>
+> Day
+>
+> Night
+
+```{r}
+as.data.frame(table(Patient_Data$Shift_Taken))
+```
+
+### plot data
+
+```{r}
+shift_taken = as.data.frame(table(Patient_Data$Shift_Taken))
+colnames(shift_taken) = c("shift", "frequency")
+
+shift_taken = shift_taken[shift_taken$shift %in% as.factor(c("Day", "Day and Night", "Night")),]
+shift_taken
+```
+
+### Plot
+
+```{r}
+create_frequency_bar_graphs(shift_taken,"shift", "frequency" )
+```
+
+### Shift by Homecare
+
+```{r}
+HomeCare_shift_taken = Patient_Data %>%
+  filter(Facility_Type == "Home-care") %>%
+  .$Shift_Taken %>%
+  table() %>%
+  as.data.frame()
+colnames(HomeCare_shift_taken) = c("shift_taken", "frequency")
+
+
+
+HomeCare_shift_taken
+
+```
+
+### Shift by Income
+
+```{r}
+InPatient_shift_taken = Patient_Data %>%
+  filter(Facility_Type == "Inpatient") %>%
+  .$Shift_Taken %>%
+  table() %>%
+  as.data.frame()
+colnames(InPatient_shift_taken) = c("shift_taken", "frequency")
+
+
+
+InPatient_shift_taken
+create_frequency_bar_graphs(InPatient_shift_taken, "shift_taken", "frequency")
+```
